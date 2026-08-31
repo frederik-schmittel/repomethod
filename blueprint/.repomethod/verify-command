@@ -1,0 +1,14 @@
+# RepoMethod cannot guess how to verify this repository.
+# Replace this file's one active line with the exact command that must
+# pass before delivery is considered complete, for example:
+#   make test
+#   npm test
+#   pytest
+#
+# Run `.repomethod/scripts/verify.sh .` to see the candidate commands
+# RepoMethod detected in this repository (Makefile targets, package.json
+# scripts, pytest config).
+#
+# Until replaced, `.repomethod/scripts/verify.sh .` fails on purpose — an
+# unconfigured gate must never silently pass. There is only this one command:
+# if the full suite needs Docker or other external systems, make it run in CI.

@@ -1,0 +1,5 @@
+.repomethod/backups/
+graphify-out/
+*.tmp
+.DS_Store
+.claude/

@@ -1,0 +1,64 @@
+name: Agent Task
+description: Self-contained task spec for an autonomous coding agent.
+title: "[task] "
+labels: ["agent-task"]
+body:
+  - type: input
+    id: title
+    attributes:
+      label: Titel
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Kontext
+      description: Alles, was ein Agent ohne Vorwissen benötigt.
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Ziel
+      description: Ein einzelner, überprüfbarer Satz.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Erlaubte Dateien/Verzeichnisse (Glob-Pattern, eine pro Zeile).
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of Scope
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Akzeptanzkriterien
+      description: Nummerierte, möglichst maschinell prüfbare Liste.
+    validations:
+      required: true
+  - type: input
+    id: verify_command
+    attributes:
+      label: Verify-Befehl
+      value: .repomethod/scripts/agent-gate.sh --spec <spec>
+    validations:
+      required: true
+  - type: textarea
+    id: expected_evidence
+    attributes:
+      label: Erwartete Evidenz
+    validations:
+      required: true
+  - type: textarea
+    id: escalation_conditions
+    attributes:
+      label: Eskalationsbedingungen
+    validations:
+      required: true

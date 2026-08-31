@@ -1,0 +1,15 @@
+# One shell glob per line, matched against repository-relative paths with
+# bash `case`. `*` matches `/` here, so `x/*` covers `x/a/b/c`. There is no
+# globstar: a pattern must be listed both root-anchored and nested.
+infra/*
+deploy/*
+compliance/*
+auth/*
+*/auth/*
+migrations/*
+*/migrations/*
+billing/*
+*/billing/*
+secrets/*
+*/secrets/*
+ARCHITECTURE.md

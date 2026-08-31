@@ -1,0 +1,10 @@
+# One shell glob per line, matched against repository-relative paths with
+# bash `case` (same semantics as protected-zones.txt: `*` matches `/`, no
+# globstar, list patterns both root-anchored and nested). A path matching
+# any line is dropped from the change set before scope evaluation, so it
+# never produces a VIOLATION. protected-zones.txt still wins: a path that
+# also matches a protected zone is reported regardless.
+node_modules
+node_modules/*
+*/node_modules
+*/node_modules/*

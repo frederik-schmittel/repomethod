@@ -1,0 +1,113 @@
+# Task: <short, unambiguous title>
+
+## Context
+
+<Everything an agent with no prior knowledge needs: why this change, which
+existing systems are affected, relevant earlier decisions.>
+
+## Objective
+
+<A single, verifiable sentence.>
+
+## Definition of Ready
+
+- Product behaviour and non-goals are unambiguous.
+- Affected architecture boundaries and authoritative components are named.
+- Interfaces between work packets are fixed.
+- Tenant, scope, permission, and data-integrity requirements are clarified.
+- Acceptance criteria are mapped to tests or concrete evidence.
+- Open architecture, security, or product decisions are resolved.
+
+## Architecture and Authority Boundaries
+
+<Which component decides and persists authoritatively? Which components may
+only present or transport? Relevant states and transitions.>
+
+## Dependencies and Interfaces
+
+<Existing interfaces, upstream tasks, and the exact interfaces produced for
+downstream work packets.>
+
+## Scope
+
+<Allowed files/directories as glob patterns, one per line, e.g.:>
+
+- `src/feature-x/**`
+- `tests/feature-x/**`
+
+## Out of Scope
+
+<Explicitly excluded areas.>
+
+## Acceptance Criteria
+
+<An unambiguous, ideally machine-checkable list, e.g.:>
+
+1. <Criterion 1>
+2. <Criterion 2>
+
+## Acceptance Mapping
+
+A backtick cell in `Test/Evidence` is enforced by the gate: a path under
+`.repomethod/evidence/` must exist and be non-empty, and any other token
+(a test name) must appear literally in an evidence file. Free text or an
+`<placeholder>` stays a checkbox-only check.
+
+| Criterion | Test/Evidence | Work Packet |
+| --- | --- | --- |
+| 1 | `<exact test or evidence path>` | `<packet-id>` |
+
+## Work Packets
+
+<Decompose the implementation along independently testable responsibilities.
+Each packet gets its own file from `.repomethod/templates/spec-packet.md`, a
+fresh agent context, and at most the token budget the packet declares. The
+comprehensive planning phase itself is exempt from this implementation limit.>
+
+- `<packet-id>`: `<one independently testable outcome>`
+
+## Verify Command
+
+```
+.repomethod/scripts/agent-gate.sh --spec specs/<slug>.md
+```
+
+## Test Count Command
+
+<Optional. Exactly one line: a command whose only output is the current test
+count as an integer, e.g. `bats tests/*.bats | tail -1 | sed -E 's/.* ([0-9]+)
+tests?,.*/\1/'`. If set, the acceptance report must contain a line
+`Tests: <n>` with exactly this number.>
+
+## Integration Invariants
+
+<Optional, but mandatory for every spec with budget, retry, or report
+aggregation logic. Shell lines as backtick bullets, executed top to bottom
+from the repo root; each must end with status 0. The first line(s) produce
+the smoke artifact, the following ones check it. Green unit tests alone no
+longer suffice once invariants are declared. Invariants must be read-only or
+write only to git-ignored paths — a `.tmp.` infix under
+`.repomethod/evidence/` is ignored by the shipped gitignore, `$TMPDIR` also
+works. An invariant that dirties a tracked path fails the check and would
+otherwise stall `supervisor.sh` in `continue` forever.>
+
+- `<cli> scan ./tests/fixtures/repo > .repomethod/evidence/smoke.tmp.jsonl`
+- `test "$(grep -c budget_exhausted .repomethod/evidence/smoke.tmp.jsonl)" -le 5`
+- `jq -e '.status' .repomethod/evidence/smoke-report.tmp.json`
+
+## Expected Evidence
+
+<e.g. test output, screenshot, API response, log excerpt, reproducible
+command. Store files under `.repomethod/evidence/`, referenced by file name.>
+
+- `.repomethod/evidence/<name>.txt`
+
+## Escalation Conditions
+
+- a change outside the allowed scope is required
+- a new dependency is required but not approved
+- a security decision is required
+- multiple architecturally relevant solutions are possible
+- acceptance criteria contradict each other
+- required secrets or systems are missing
+- a work packet needs more than its declared token budget or additional scope

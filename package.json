@@ -1,0 +1,45 @@
+{
+  "name": "repomethod",
+  "version": "0.0.1",
+  "description": "One repository-native engineering method for every coding agent",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/frederik-schmittel/repomethod.git"
+  },
+  "homepage": "https://github.com/frederik-schmittel/repomethod#readme",
+  "bugs": {
+    "url": "https://github.com/frederik-schmittel/repomethod/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "repomethod": "bin/repomethod.js"
+  },
+  "files": [
+    "bin/",
+    "blueprint/",
+    "lib/",
+    "migrations/",
+    "install.sh",
+    "update.sh",
+    "uninstall.sh",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "VERSION"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "bats tests/*.bats",
+    "pack:check": "npm pack --dry-run --json"
+  },
+  "keywords": [
+    "coding-agents",
+    "agent-workflows",
+    "claude-code",
+    "codex"
+  ]
+}

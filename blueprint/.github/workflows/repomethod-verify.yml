@@ -1,0 +1,45 @@
+name: repomethod-verify
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  agent-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Resolve task spec
+        id: task
+        shell: bash
+        env:
+          BASE: origin/${{ github.event.pull_request.base.ref }}
+        run: |
+          mapfile -t specs < <(git diff --name-only "$BASE...HEAD" -- ':(top,glob)specs/*.md' ':(top,exclude)specs/TEMPLATE.md')
+          if [ "${#specs[@]}" -gt 1 ]; then
+            echo "Expected at most one changed task spec under specs/; found ${#specs[@]}." >&2
+            exit 1
+          fi
+          if [ "${#specs[@]}" -eq 0 ]; then
+            echo "mode=quick" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=full" >> "$GITHUB_OUTPUT"
+            echo "spec=${specs[0]}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Agent gate
+        shell: bash
+        env:
+          BASE: origin/${{ github.event.pull_request.base.ref }}
+          MODE: ${{ steps.task.outputs.mode }}
+          SPEC: ${{ steps.task.outputs.spec }}
+        run: |
+          if [ "$MODE" = quick ]; then
+            .repomethod/scripts/agent-gate.sh --quick --base "$BASE" \
+              --report .repomethod/evidence/report.md
+          else
+            .repomethod/scripts/agent-gate.sh --base "$BASE" --spec "$SPEC" \
+              --report .repomethod/evidence/report.md
+          fi

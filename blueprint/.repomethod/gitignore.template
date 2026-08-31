@@ -1,0 +1,17 @@
+# Transient state RepoMethod writes under .repomethod/ while updating managed
+# files, workflow state, or skills. Patterns here are relative to this
+# directory (the .gitignore lives inside .repomethod/). Do not commit these.
+*.tmp.*
+*.json.lock
+*.json.lock/
+backups/
+evidence/*.scratch
+
+# Supervisor sidecars: per-run bookkeeping only. The workflow state
+# (workflows/<feature>.json) and the agent handoff
+# (workflows/<feature>.handoff.json) ARE meant to be committed so a fresh
+# agent can resume from a clean checkout. So is the rest of evidence/ —
+# only the supervisor's own per-check gate logs are noise.
+workflows/*.supervisor.json
+workflows/*.dispatch.md
+evidence/supervisor-*.log
