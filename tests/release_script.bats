@@ -92,7 +92,9 @@ teardown() {
     [ "$status" -eq 0 ]
     run grep -F "Install shellcheck v0.11.0" "$workflow"
     [ "$status" -eq 0 ]
-    run grep -F "bats tests/*.bats" "$workflow"
+    run grep -F "npm run test:timed -- test-results" "$workflow"
+    [ "$status" -eq 0 ]
+    run grep -F "actions/upload-artifact@v4" "$workflow"
     [ "$status" -eq 0 ]
     run grep -F "Verify npm package" "$workflow"
     [ "$status" -eq 0 ]

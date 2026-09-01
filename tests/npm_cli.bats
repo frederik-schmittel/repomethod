@@ -50,11 +50,8 @@ teardown() {
     # accepting any Bash 4.x.
     stub_dir="$(mktemp -d)"
     cat > "${stub_dir}/bash" <<'EOF'
-#!/usr/bin/env bash
-case "$*" in
-    *BASH_VERSINFO*) printf '4.2' ;;
-    *) exec /bin/bash "$@" ;;
-esac
+#!/bin/sh
+printf '4.2'
 EOF
     chmod +x "${stub_dir}/bash"
     run env PATH="${stub_dir}:${PATH}" node "${REPO_ROOT}/bin/repomethod.js" doctor --target "$TARGET"

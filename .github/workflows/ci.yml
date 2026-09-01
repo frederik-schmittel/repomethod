@@ -44,8 +44,16 @@ jobs:
           brew install bash
           bash --version
 
-      - name: Run test suite
-        run: bats tests/*.bats
+      - name: Run test suite with timings
+        run: npm run test:timed -- test-results
+
+      - name: Upload Bats timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bats-timings-${{ runner.os }}
+          path: test-results/
+          if-no-files-found: warn
 
       - name: Verify npm package
         run: |
