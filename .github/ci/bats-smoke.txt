@@ -1,0 +1,7 @@
+# Fast cross-platform coverage for pull requests.
+tests/blueprint_agent_gate.bats
+tests/ci_sharding.bats
+tests/npm_cli.bats
+tests/uninstall_toctou.bats
+tests/update_migrations.bats
+tests/workflow_graph.bats
