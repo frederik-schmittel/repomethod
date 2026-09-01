@@ -4,7 +4,7 @@ setup() {
     GRAPH="${REPO_ROOT}/blueprint/.repomethod/scripts/workflow-graph.sh"
     WORK="$(mktemp -d)"
     STATE="${WORK}/feature.json"
-    "$GRAPH" init --feature demo --mode classic --state "$STATE" --verify-command true >/dev/null
+    "$GRAPH" init --feature demo --mode classic --state "$STATE" --verify-command true --base HEAD >/dev/null
     HF="${WORK}/demo.handoff.json"
 }
 

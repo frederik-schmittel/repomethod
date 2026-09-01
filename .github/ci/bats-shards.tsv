@@ -1,0 +1,42 @@
+# Deterministic two-way split from the timing baseline.
+# Regenerate from a full timing artifact with:
+# node scripts/plan-bats-shards.mjs test-results/files.tsv 2
+# shard	file
+0	tests/blueprint_deliver.bats
+0	tests/blueprint_verify_command.bats
+0	tests/blueprint_verify_invariants.bats
+0	tests/blueprint_verify_report.bats
+0	tests/install_basic.bats
+0	tests/lib_common.bats
+0	tests/lib_manifest.bats
+0	tests/lib_skills.bats
+0	tests/lib_target.bats
+0	tests/skill_compliance_review.bats
+0	tests/skill_docs_sync.bats
+0	tests/skill_scoped_delivery.bats
+0	tests/skill_security_review.bats
+0	tests/supervisor.bats
+0	tests/uninstall_skill_links.bats
+0	tests/uninstall_toctou.bats
+0	tests/workflow_baseline.bats
+1	tests/blueprint_agent_gate.bats
+1	tests/blueprint_ci.bats
+1	tests/ci_sharding.bats
+1	tests/blueprint_preflight.bats
+1	tests/blueprint_verify_acceptance.bats
+1	tests/blueprint_verify_evidence.bats
+1	tests/blueprint_verify_scope.bats
+1	tests/lib_args.bats
+1	tests/lib_pointer.bats
+1	tests/manage_skills.bats
+1	tests/npm_cli.bats
+1	tests/readme.bats
+1	tests/release_script.bats
+1	tests/skill_dependency_upgrade.bats
+1	tests/skill_repo_onboarding.bats
+1	tests/skill_ship_pr.bats
+1	tests/uninstall_basic.bats
+1	tests/update_basic.bats
+1	tests/update_migrations.bats
+1	tests/workflow_graph.bats
+1	tests/workflow_handoff.bats

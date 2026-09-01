@@ -72,7 +72,8 @@ teardown() {
 }
 
 @test "release.sh dies on a non-semver argument" {
-    run "${REPO_ROOT}/scripts/release.sh" "not-a-version"
+    _install_successful_gate_doubles
+    run env PATH="${TEST_BIN}:${PATH}" "${REPO_ROOT}/scripts/release.sh" "not-a-version"
     [ "$status" -eq 1 ]
     [[ "$output" == *"semver"* ]]
 }
@@ -92,7 +93,9 @@ teardown() {
     [ "$status" -eq 0 ]
     run grep -F "Install shellcheck v0.11.0" "$workflow"
     [ "$status" -eq 0 ]
-    run grep -F "bats tests/*.bats" "$workflow"
+    run grep -F "npm run test:timed -- test-results" "$workflow"
+    [ "$status" -eq 0 ]
+    run grep -F "actions/upload-artifact@v4" "$workflow"
     [ "$status" -eq 0 ]
     run grep -F "Verify npm package" "$workflow"
     [ "$status" -eq 0 ]
@@ -111,8 +114,9 @@ teardown() {
         skip "would recurse into release.sh's own gate — already running nested"
     fi
     _make_clone
+    _install_successful_gate_doubles
     echo "local edit" >> "${CLONE}/README.md"
-    run "${CLONE}/scripts/release.sh" "9.9.9"
+    run env PATH="${TEST_BIN}:${PATH}" "${CLONE}/scripts/release.sh" "9.9.9"
     [ "$status" -eq 1 ]
     [[ "$output" == *"dirty"* ]]
     # confirm it aborted before touching anything
