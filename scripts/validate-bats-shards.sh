@@ -30,7 +30,7 @@ while IFS=$'\t' read -r shard file extra; do
     [ -f "$file" ] || { echo "[error] shard manifest references missing file: $file" >&2; exit 1; }
     [ -z "${seen[$file]:-}" ] || { echo "[error] duplicate test file in shard manifest: $file" >&2; exit 1; }
     seen[$file]=1
-    counts[$shard]=$((counts[$shard] + 1))
+    counts[shard]=$((counts[shard] + 1))
 done < "$MANIFEST"
 
 for file in "${expected[@]}"; do
