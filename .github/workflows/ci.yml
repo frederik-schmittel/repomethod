@@ -4,7 +4,6 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
   schedule:
     - cron: '17 3 * * 1'
@@ -29,6 +28,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Install bats-core
         run: |
@@ -54,38 +55,8 @@ jobs:
           path: test-results/
           if-no-files-found: error
 
-  pr-ubuntu-full:
-    if: github.event_name == 'pull_request'
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-
-      - name: Install bats-core
-        run: |
-          git clone --depth 1 --branch v1.13.0 https://github.com/bats-core/bats-core.git /tmp/bats-core
-          test "$(git -C /tmp/bats-core rev-parse HEAD)" = "3bca150ec86275d6d9d5a4fd7d48ab8b6c6f3d87"
-          sudo /tmp/bats-core/install.sh /usr/local
-          bats --version
-
-      - name: Run Ubuntu shard
-        run: bash scripts/run-bats-lane.sh shard test-results "${{ matrix.shard }}"
-
-      - name: Upload shard timings
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bats-ubuntu-shard-${{ matrix.shard }}
-          path: test-results/
-          if-no-files-found: error
-
   full-suite:
-    if: github.event_name != 'pull_request'
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -95,6 +66,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Install bats-core
         run: |
