@@ -126,3 +126,17 @@ EOF
     [ "$status" -eq 0 ]
     [ "$output" = "bash scripts/ci-local.sh" ]
 }
+
+@test "RepoMethod dogfoods the complete local CI contract as its verify authority" {
+    run cat "${REPO_ROOT}/.repomethod/verify-command"
+    [ "$status" -eq 0 ]
+    [ "$output" = "npm run ci:local" ]
+}
+
+@test "contributor and installed-agent guidance require complete pre-push verification" {
+    run grep -F 'npm run ci:local' "${REPO_ROOT}/CONTRIBUTING.md"
+    [ "$status" -eq 0 ]
+    run grep -F 'targeted tests alone do not establish push-readiness' \
+        "${REPO_ROOT}/blueprint/.repomethod/AGENTS.md"
+    [ "$status" -eq 0 ]
+}
