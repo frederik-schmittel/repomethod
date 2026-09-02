@@ -18,20 +18,20 @@ teardown() {
 }
 
 @test "accepts the English Integration Invariants heading" {
-    cat > "${WORK}/spec.md" <<'EOF_SPEC'
+    cat > "${WORK}/spec.md" <<'EOF'
 # Task: x
 
 ## Integration Invariants
 
 - `true`
-EOF_SPEC
+EOF
     run "$SCRIPT" --spec "${WORK}/spec.md"
     [ "$status" -eq 0 ]
     [[ "$output" == *"1/1 integration invariants passed"* ]]
 }
 
 @test "runs each invariant in order and passes when all exit 0" {
-    cat > "${WORK}/spec.md" <<EOF_SPEC
+    cat > "${WORK}/spec.md" <<EOF
 # Task: budget
 
 ## Integrationsinvarianten
@@ -39,14 +39,14 @@ EOF_SPEC
 - \`printf '{"e":"budget_exhausted"}\n{"e":"budget_exhausted"}\n' > ${WORK}/smoke.jsonl\`
 - \`test "\$(grep -c budget_exhausted ${WORK}/smoke.jsonl)" -le 5\`
 - \`grep -q budget_exhausted ${WORK}/smoke.jsonl\`
-EOF_SPEC
+EOF
     run "$SCRIPT" --spec "${WORK}/spec.md"
     [ "$status" -eq 0 ]
     [[ "$output" == *"3/3 integration invariants passed"* ]]
 }
 
 @test "fails on the first invariant that exits non-zero and names it" {
-    cat > "${WORK}/spec.md" <<EOF_SPEC
+    cat > "${WORK}/spec.md" <<EOF
 # Task: budget
 
 ## Integrationsinvarianten
@@ -54,7 +54,7 @@ EOF_SPEC
 - \`printf 'a\nb\nc\nd\ne\nf\n' > ${WORK}/smoke.txt\`
 - \`test "\$(wc -l < ${WORK}/smoke.txt)" -le 5\`
 - \`echo unreached > ${WORK}/unreached\`
-EOF_SPEC
+EOF
     run "$SCRIPT" --spec "${WORK}/spec.md"
     [ "$status" -eq 1 ]
     [[ "$output" == *"INVARIANT-FAILED: [2]"* ]]
@@ -62,7 +62,7 @@ EOF_SPEC
 }
 
 @test "section ends at the next heading" {
-    cat > "${WORK}/spec.md" <<EOF_SPEC
+    cat > "${WORK}/spec.md" <<EOF
 # Task: x
 
 ## Integrationsinvarianten
@@ -72,7 +72,7 @@ EOF_SPEC
 ## Eskalationsbedingungen
 
 - \`false\`
-EOF_SPEC
+EOF
     run "$SCRIPT" --spec "${WORK}/spec.md"
     [ "$status" -eq 0 ]
     [[ "$output" == *"1/1 integration invariants passed"* ]]

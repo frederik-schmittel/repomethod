@@ -1,7 +1,19 @@
 #!/usr/bin/env bash
 # verify-invariants.sh --spec <spec.md>
-# Runs integration invariants and enforces explicit invariant coverage for
-# reviewed plan obligations whose invariant_required metadata is true.
+#
+# Runs the integration invariants a spec declares under "## Integration
+# Invariants" (or the original German "## Integrationsinvarianten" — both
+# spellings are accepted): every "- `<command>`" bullet in that section is
+# executed with `bash -c` from the current directory (the repo root, as the
+# gate runs it), top to bottom. Each must exit 0. The first bullet(s) usually
+# produce a smoke artifact; the rest assert over it. No section, or a section
+# with no bullets, is a pass — this check is opt-in.
+#
+# In addition, a bullet may bind an obligation as "- `obl.<anchor>`: `<command>`".
+# Every approved plan obligation carrying `invariant_required: true` must have
+# such a binding, otherwise the check fails closed. The reviewed metadata is the
+# only hard coverage contract; keyword matching for error/order/edge-case
+# language is advisory (INVARIANT-WARN) and can never satisfy or fail coverage.
 set -euo pipefail
 
 spec=""
@@ -119,7 +131,11 @@ if [ "${#invariants[@]}" -eq 0 ]; then
     exit 0
 fi
 
-# Invariants must be read-only or write only into git-ignored paths.
+# Invariants must be read-only or write only into git-ignored paths (a `.tmp.`
+# artifact under .repomethod/evidence/, $TMPDIR, ...). One that dirties a
+# tracked path makes every later `supervisor.sh check` re-dirty the tree and
+# stalls the workflow in `continue` forever. `git status` omits ignored files,
+# so a snapshot before/after catches exactly the bad case.
 before="$(git status --porcelain 2>/dev/null | LC_ALL=C sort || true)"
 
 count=0

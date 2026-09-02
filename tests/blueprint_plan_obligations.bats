@@ -361,6 +361,12 @@ SPEC
 
 1. works
 
+## Acceptance Mapping
+
+| Criterion | Test/Evidence | Plan Ref |
+| --- | --- | --- |
+| 1 | done | `obl.api` |
+
 ## Expected Evidence
 
 - `.repomethod/evidence/proof.txt`

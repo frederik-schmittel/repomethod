@@ -42,6 +42,7 @@ artifact="$repo_root/.repomethod/workflows/${feature}.plan-obligations.json"
 
 # Work-packet membership is declared by the feature spec itself. The existing
 # packet convention fixes each packet at specs/packets/<id>.md.
+# shellcheck disable=SC2016 # backticks below are literal work-packet bullet syntax, not a command substitution
 mapfile -t packet_ids < <(
     awk '
         /^## Work Packets[[:space:]]*$/ {flag=1; next}
@@ -65,8 +66,7 @@ for packet_id in "${packet_ids[@]}"; do
 done
 
 refs_tmp="$(mktemp "${TMPDIR:-/tmp}/repomethod-provenance.refs.XXXXXX")"
-cleanup() { rm -f -- "$refs_tmp"; }
-trap cleanup EXIT
+trap 'rm -f -- "$refs_tmp"' EXIT
 
 # Emits one Plan Ref cell per data row. The column is discovered by its exact
 # header, so appending it to the existing table does not disturb the historical
