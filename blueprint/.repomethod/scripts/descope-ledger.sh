@@ -42,22 +42,21 @@ validate_plan_ref() {
 }
 
 refuse_symlinked_state() {
-    local path="$1" p root=""
-    [ -L "$path" ] && fail "refusing workflow state symlink: $path"
-    p="$(dirname "$path")"
+    local sp="$1" p root=""
+    p="$(dirname "$sp")"
     while :; do
-        [ -L "$p" ] && fail "refusing symlinked workflow directory: $p"
         if [ -e "$p/.git" ]; then root="$p"; break; fi
         case "$p" in /|.) break ;; esac
         p="$(dirname "$p")"
     done
-    if [ -n "$root" ]; then
-        p="$(dirname "$path")"
-        while [ "$p" != "$root" ]; do
-            [ -L "$p" ] && fail "refusing symlinked workflow directory: $p"
-            p="$(dirname "$p")"
-        done
-    fi
+    [ -L "$sp" ] && fail "refusing workflow state symlink: $sp"
+    p="$(dirname "$sp")"
+    while :; do
+        [ -L "$p" ] && fail "refusing symlinked workflow directory: $p"
+        [ -n "$root" ] || break
+        [ "$p" = "$root" ] && break
+        p="$(dirname "$p")"
+    done
 }
 
 load_paths() {
@@ -67,9 +66,20 @@ load_paths() {
 
     feature="$(jq -er '.feature | select(type == "string" and test("^[a-z0-9][a-z0-9._-]*$"))' "$state" 2>/dev/null)" \
         || fail "workflow state has an invalid feature slug: $state"
-    state_dir="$(dirname "$state")"
-    ledger="${state_dir}/${feature}.descopes.jsonl"
-    checkpoint="${state_dir}/${feature}.descopes.checkpoint.json"
+    repo_root="$(jq -er '.repo_root | select(type == "string" and length > 0)' "$state" 2>/dev/null)" \
+        || fail "workflow state has no valid repo_root: $state"
+    [ -d "$repo_root/.git" ] || fail "workflow repo_root is not a git repository: $repo_root"
+
+    workflow_dir="${repo_root}/.repomethod/workflows"
+    if [ "$command" = "init" ]; then
+        mkdir -p "$workflow_dir"
+    fi
+    [ -d "$workflow_dir" ] || fail "workflow directory not found: $workflow_dir"
+    [ ! -L "${repo_root}/.repomethod" ] || fail "refusing symlinked .repomethod directory: ${repo_root}/.repomethod"
+    [ ! -L "$workflow_dir" ] || fail "refusing symlinked workflow directory: $workflow_dir"
+
+    ledger="${workflow_dir}/${feature}.descopes.jsonl"
+    checkpoint="${workflow_dir}/${feature}.descopes.checkpoint.json"
     lock_dir="${checkpoint}.lock"
 
     [ ! -L "$ledger" ] || fail "descope ledger must not be a symlink: $ledger"
