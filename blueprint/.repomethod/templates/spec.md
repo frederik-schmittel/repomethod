@@ -46,6 +46,34 @@ approval for the displayed extraction revision before downstream checks consume
 it. Quick MVP has no spec and therefore no plan obligations.
 -->
 
+## Contract Shapes
+
+<!-- Optional. Declare exactly one fenced `json` object with `version: 1` and a
+non-empty `contracts` array. Each contract uses a stable `obl.<anchor>` source
+and a fixed adapter descriptor. Spec content is parsed as data and never
+evaluated. Example:
+
+```json
+{
+  "version": 1,
+  "contracts": [
+    {
+      "type": "Job",
+      "source": "obl.job-contract",
+      "adapter": {"language": "python", "module": "app.models", "model": "Job"},
+      "fields": ["id", "status"],
+      "required": ["id", "status"],
+      "enums": {"status": ["queued", "done"]}
+    }
+  ]
+}
+```
+
+Adapters emit canonical JSON with exactly `version`, `type`, `fields`,
+`required`, and `enums`. Arrays are compared as sets after normalization; the
+verifier reports expected and actual values for every mismatch.
+-->
+
 ## Scope
 
 <Allowed files/directories as glob patterns, one per line, e.g.:>

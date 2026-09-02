@@ -24,6 +24,7 @@ Manage repository skills only through `.repomethod/scripts/manage-skills.sh`.
 .repomethod/scripts/verify-scope.sh --spec <spec> --repo .
 .repomethod/scripts/verify-forbidden.sh --spec <spec> --repo .
 .repomethod/scripts/plan-obligations.sh check [--mode <classic|graph>] --spec <spec> --repo .   # --mode optional; agent-gate binds it from --state
+.repomethod/scripts/verify-contracts.sh --spec <spec>
 .repomethod/scripts/verify-acceptance.sh --spec <spec> --report .repomethod/evidence/report.md
 .repomethod/scripts/verify-evidence.sh --spec <spec>
 .repomethod/scripts/verify-report.sh --spec <spec> --report .repomethod/evidence/report.md
@@ -42,6 +43,8 @@ point once and stores it as `config.base_ref` in the workflow state; a
 state-aware gate (`agent-gate.sh --spec <spec> --state <file>`, and the
 supervisor) then reuses that pinned SHA instead of re-resolving. An explicit
 `--base` still wins and keeps its staleness diagnostics.
+
+`## Contract Shapes` is optional. When present, it contains one fenced JSON declaration (`version: 1`) whose contracts name a stable `obl.<anchor>` source plus a fixed Python module/model adapter. `verify-contracts.sh` owns declaration validation and comparison semantics; adapters only extract/normalize built models. The canonical adapter JSON keys are `version`, `type`, `fields`, `required`, and `enums`. The shipped Python adapter calls `model_json_schema()` in the target project's Python environment; RepoMethod does not bundle Pydantic. Missing dependencies/models, adapter errors, malformed JSON, and invalid declarations fail closed. Spec text is never `eval`ed or generated into executable shell/Python.
 
 `agent-gate.sh --spec` also runs `verify-forbidden` (the optional
 `## Must Not Exist` section is enforced inside the declared Scope),

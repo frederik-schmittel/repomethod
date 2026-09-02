@@ -4,6 +4,7 @@
 # shard	file
 0	tests/blueprint_deliver.bats
 0	tests/blueprint_verify_command.bats
+0	tests/blueprint_verify_contracts.bats
 0	tests/blueprint_verify_forbidden.bats
 0	tests/blueprint_verify_invariants.bats
 0	tests/blueprint_verify_report.bats

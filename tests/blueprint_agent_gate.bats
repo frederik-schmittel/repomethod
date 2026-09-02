@@ -365,3 +365,39 @@ EOF
     run grep -F "agent-gate.sh --quick" "${REPO_ROOT}/blueprint/.repomethod/AGENTS.md"
     [ "$status" -eq 0 ]
 }
+
+@test "agent gate runs contract verification in the full gate" {
+    printf 'true\n' > "${WORK}/.repomethod/verify-command"
+    mkdir -p "${WORK}/.repomethod/evidence"
+    cat > "${WORK}/specs/my-feature.md" <<'EOF'
+# Task: contracts gate
+
+## Scope
+
+- `src/**`
+
+## Acceptance Criteria
+
+1. it works
+
+## Expected Evidence
+
+- `.repomethod/evidence/proof.txt`
+EOF
+    cat > "${WORK}/.repomethod/evidence/report.md" <<'EOF'
+Report for my-feature.md
+- [x] 1. done
+EOF
+    printf 'proof\n' > "${WORK}/.repomethod/evidence/proof.txt"
+    cat > "${WORK}/.repomethod/scripts/verify-contracts.sh" <<'EOF'
+#!/usr/bin/env bash
+echo CONTRACT-GATE-RAN
+EOF
+    chmod +x "${WORK}/.repomethod/scripts/verify-contracts.sh"
+    cd "$WORK" && git init -q -b main && git config user.email t@e.x && git config user.name T \
+        && git add -A && git commit -q -m init
+    run "${WORK}/.repomethod/scripts/agent-gate.sh" --spec specs/my-feature.md --base HEAD
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"CONTRACT-GATE-RAN"* ]]
+    [[ "$output" == *"all gates passed"* ]]
+}

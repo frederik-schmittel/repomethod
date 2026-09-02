@@ -3,7 +3,7 @@
 # agent-gate.sh --quick [--base <b>] [--report <r>]
 #
 # Full gate (classic/graph): runs verify, verify-scope, verify-forbidden,
-# plan-obligations, verify-acceptance, verify-evidence, verify-report, and
+# plan-obligations, verify-contracts, verify-acceptance, verify-evidence, verify-report, and
 # verify-invariants in order and trusts only their exit status. Every argument
 # comes from a flag — nothing is read from the environment. --spec has no
 # default and fails closed if omitted.
@@ -119,6 +119,7 @@ fi
 "${here}/verify-scope.sh" --spec "$SPEC" "${scope_base_args[@]}" --repo .
 "${here}/verify-forbidden.sh" --spec "$SPEC" --repo .
 "${here}/plan-obligations.sh" check "${obligation_mode_args[@]}" --spec "$SPEC" --repo .
+"${here}/verify-contracts.sh" --spec "$SPEC"
 "${here}/verify-acceptance.sh" --spec "$SPEC" --report "$REPORT"
 "${here}/verify-evidence.sh" --spec "$SPEC"
 "${here}/verify-report.sh" --spec "$SPEC" --report "$REPORT"
