@@ -23,6 +23,7 @@
 1	tests/blueprint_agent_gate.bats
 1	tests/blueprint_ci.bats
 1	tests/ci_sharding.bats
+1	tests/blueprint_plan_obligations.bats
 1	tests/blueprint_preflight.bats
 1	tests/blueprint_verify_acceptance.bats
 1	tests/blueprint_verify_evidence.bats

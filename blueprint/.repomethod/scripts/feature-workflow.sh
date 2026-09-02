@@ -90,6 +90,7 @@ quick-mvp workflow selected (no workflow state is created)
 6. Close out with: .repomethod/scripts/deliver.sh --quick
    (verify-command + no protected zone touched + a free-text note in
    .repomethod/evidence/report.md). No spec file, no four-way aggregate.
+Plan obligations are not applicable in this stateless path.
 No research, graph state, subagents, packetization, or spec in this path.
 Stop before changes involving protected paths, architecture, or security decisions.
 EOF
@@ -103,6 +104,8 @@ Create a bounded implementation state with:
 .repomethod/scripts/feature-workflow.sh classic init --feature <slug> --verify-command ".repomethod/scripts/agent-gate.sh --spec specs/<slug>.md"
 Classic runs Implementation -> configured verification command -> Completion.
 Verification failures create a bounded Fix -> Verification loop.
+If the feature spec declares ## Plan Obligations, run plan-obligations.sh extract
+and approve the current extraction revision before any downstream check consumes it.
 EOF
             exit 0
         fi
@@ -117,6 +120,17 @@ EOF
         ;;
     graph)
         shift
+        if [ "$#" -eq 0 ]; then
+            cat <<'EOF'
+graph workflow selected
+Research -> Plan -> obligation extraction/review -> execution graph approval -> Implementation -> Verification -> Completion.
+Declare normative statements in specs/<feature>.md under ## Plan Obligations.
+Run plan-obligations.sh extract after planning and approve that exact extraction
+revision before downstream checks consume it. Editing the section creates a new
+pending revision. Then preview and approve the execution graph as usual.
+EOF
+            exit 0
+        fi
         if [ "${1:-}" = "init" ]; then
             shift
             "${here}/preflight.sh" >&2 || exit $?
