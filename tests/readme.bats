@@ -17,11 +17,20 @@ setup() {
 }
 
 @test "README documents every check the full gate runs" {
-    for s in verify.sh verify-scope.sh verify-forbidden.sh verify-acceptance.sh \
-             verify-evidence.sh verify-report.sh verify-invariants.sh; do
+    for s in verify.sh verify-scope.sh verify-forbidden.sh plan-obligations.sh \
+             verify-acceptance.sh verify-evidence.sh verify-report.sh verify-invariants.sh; do
         run grep -F -- "$s" "$README"
         [ "$status" -eq 0 ]
     done
+}
+
+@test "README documents the Plan Obligations migration step" {
+    run grep -F "adding the first declaration" "$README"
+    [ "$status" -eq 0 ]
+    run grep -F "plan-obligations.sh extract" "$README"
+    [ "$status" -eq 0 ]
+    run grep -F "plan-obligations.sh approve" "$README"
+    [ "$status" -eq 0 ]
 }
 
 @test "README does not claim a single command surface it does not have" {
