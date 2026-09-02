@@ -86,29 +86,22 @@ elif [ -n "$STATE" ]; then
     scope_base_args=(--state "$STATE")
 fi
 
-plan_mode_args=()
+obligation_mode_args=()
 if [ -n "$STATE" ]; then
-    [ -f "$STATE" ] || {
-        echo "error: state not found: $STATE" >&2
-        exit 1
-    }
-    state_mode="$(jq -r '.mode // empty' "$STATE" 2>/dev/null)" || {
-        echo "error: cannot read workflow mode from state: $STATE" >&2
-        exit 1
-    }
-    case "$state_mode" in
-        classic|graph) plan_mode_args=(--mode "$state_mode") ;;
-        *)
-            echo "error: workflow state has invalid mode for plan obligations: ${state_mode:-<missing>}" >&2
-            exit 1
-            ;;
+    [ -f "$STATE" ] || { echo "error: workflow state not found: $STATE" >&2; exit 1; }
+    workflow_mode="$(jq -r '.mode? // empty' "$STATE" 2>/dev/null)" \
+        || { echo "error: cannot read workflow mode from state: $STATE" >&2; exit 1; }
+    case "$workflow_mode" in
+        classic|graph) obligation_mode_args=(--mode "$workflow_mode") ;;
+        '') ;; # Legacy/minimal states remain mode-neutral; verify-scope may still use config.base_ref.
+        *) echo "error: workflow state has unsupported mode: $workflow_mode" >&2; exit 1 ;;
     esac
 fi
 
 "${here}/verify.sh" --warn-frontend-uncovered .
 "${here}/verify-scope.sh" --spec "$SPEC" "${scope_base_args[@]}" --repo .
 "${here}/verify-forbidden.sh" --spec "$SPEC" --repo .
-"${here}/plan-obligations.sh" check "${plan_mode_args[@]}" --spec "$SPEC" --repo .
+"${here}/plan-obligations.sh" check "${obligation_mode_args[@]}" --spec "$SPEC" --repo .
 "${here}/verify-acceptance.sh" --spec "$SPEC" --report "$REPORT"
 "${here}/verify-evidence.sh" --spec "$SPEC"
 "${here}/verify-report.sh" --spec "$SPEC" --report "$REPORT"
