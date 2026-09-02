@@ -44,6 +44,20 @@ EOF
     [[ "$output" == *"shellcheck version mismatch: expected 0.11.0, got 9.9.9"* ]]
 }
 
+@test "ci-local propagates the first failing constituent status" {
+    repo="${WORK}/repo-propagation"
+    mkdir -p "$repo/scripts"
+    cp "$CI_LOCAL" "$repo/scripts/ci-local.sh"
+    cat > "$repo/scripts/ci-quality.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 37
+EOF
+    chmod +x "$repo/scripts/"*.sh
+
+    run bash "$repo/scripts/ci-local.sh"
+    [ "$status" -eq 37 ]
+}
+
 @test "ci-local rejects an executable entry point recorded as 100644" {
     repo="${WORK}/repo"
     mkdir -p "$repo/scripts"
