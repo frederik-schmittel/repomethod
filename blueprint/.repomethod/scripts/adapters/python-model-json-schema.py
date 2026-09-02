@@ -24,6 +24,11 @@ def resolve_ref(schema, root):
     return schema
 
 
+# NOTE: covers an inline "enum", a bare {"$ref"}, and anyOf/oneOf unions such as
+# Optional[Enum]. Not covered: {"allOf": [{"$ref": ...}]} wrapping and the
+# {"$ref": ..., "description": ...} sibling-key form some Pydantic versions emit.
+# Those read as "no enum", so verify-contracts.sh reports a mismatch, never a
+# false pass. Widen resolve_ref / this function if a target project hits it.
 def enum_values(schema, root):
     schema = resolve_ref(schema, root)
     if not isinstance(schema, dict):

@@ -73,6 +73,11 @@ command -v python3 >/dev/null 2>&1 || { echo "CONTRACT-DEPENDENCY-MISSING: pytho
 adapter="${here}/adapters/python-model-json-schema.py"
 [ -x "$adapter" ] || { echo "CONTRACT-ADAPTER-MISSING: ${adapter}" >&2; exit 1; }
 
+# ponytail: one scratch file for the whole run; the trap clears it even on
+# Ctrl+C / kill, where the end-of-iteration cleanup never runs.
+actual_file="$(mktemp "${TMPDIR:-/tmp}/repomethod-contract.XXXXXX")"
+trap 'rm -f -- "$actual_file"' EXIT INT TERM
+
 failures=0
 while IFS= read -r contract; do
     type_name="$(jq -r '.type' <<<"$contract")"
@@ -80,10 +85,8 @@ while IFS= read -r contract; do
     model="$(jq -r '.adapter.model' <<<"$contract")"
     expected="$(jq -c '{version:1,type,fields:(.fields|sort),required:(.required|sort),enums:(.enums|with_entries(.value |= sort))}' <<<"$contract")"
 
-    actual_file="$(mktemp "${TMPDIR:-/tmp}/repomethod-contract.XXXXXX")"
     if ! PYTHONDONTWRITEBYTECODE=1 python3 "$adapter" --module "$module" --model "$model" --type "$type_name" >"$actual_file"; then
         echo "CONTRACT-ADAPTER-FAILED: type=${type_name} module=${module} model=${model}" >&2
-        rm -f -- "$actual_file"
         failures=$((failures + 1))
         continue
     fi
@@ -98,12 +101,10 @@ while IFS= read -r contract; do
         ((keys | sort) == ["enums","fields","required","type","version"])
     ' "$actual_file" >/dev/null 2>&1; then
         echo "CONTRACT-ADAPTER-JSON-INVALID: type=${type_name}" >&2
-        rm -f -- "$actual_file"
         failures=$((failures + 1))
         continue
     fi
     actual="$(jq -c '{version,type,fields:(.fields|sort),required:(.required|sort),enums:(.enums|with_entries(.value |= sort))}' "$actual_file")"
-    rm -f -- "$actual_file"
 
     for part in fields required enums; do
         exp="$(jq -c ".${part}" <<<"$expected")"
