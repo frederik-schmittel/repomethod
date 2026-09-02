@@ -23,11 +23,11 @@ Manage repository skills only through `.repomethod/scripts/manage-skills.sh`.
 .repomethod/scripts/verify.sh .            # runs .repomethod/verify-command
 .repomethod/scripts/verify-scope.sh --spec <spec> --repo .
 .repomethod/scripts/verify-forbidden.sh --spec <spec> --repo .
+.repomethod/scripts/plan-obligations.sh check --mode <classic|graph> --spec <spec> --repo .
 .repomethod/scripts/verify-acceptance.sh --spec <spec> --report .repomethod/evidence/report.md
 .repomethod/scripts/verify-evidence.sh --spec <spec>
 .repomethod/scripts/verify-report.sh --spec <spec> --report .repomethod/evidence/report.md
 .repomethod/scripts/verify-invariants.sh --spec <spec>
-.repomethod/scripts/plan-obligations.sh check --mode <classic|graph> --spec <spec> --repo .
 .repomethod/scripts/agent-gate.sh --spec <spec>   # required aggregate gate (classic/graph)
 .repomethod/scripts/agent-gate.sh --quick          # quick gate building block: verify + protected zones + evidence note
 .repomethod/scripts/supervisor.sh check --state <file>   # deterministic verdict: done | continue | blocked | needs_human | evidence-ignored
@@ -45,12 +45,16 @@ supervisor) then reuses that pinned SHA instead of re-resolving. An explicit
 
 `agent-gate.sh --spec` also runs `verify-forbidden` (the optional
 `## Must Not Exist` section is enforced inside the declared Scope),
-`verify-report` (the acceptance report must name its spec, and if the spec
-declares a `## Test Count Command` its `Tests: <n>` line must match that
-command's current output), and `verify-invariants` (every
-`## Integration Invariants` bullet, run from the repo root, must exit 0). A
-spec with budget, retry, or report-aggregation logic must declare integration
-invariants — green unit tests do not satisfy it on their own.
+`plan-obligations.sh check` (declared plan obligations require a current,
+approved extraction before acceptance/evidence gates run), `verify-report`
+(the acceptance report must name its spec, and if the spec declares a
+`## Test Count Command` its `Tests: <n>` line must match that command's current
+output), and `verify-invariants` (every `## Integration Invariants` bullet, run
+from the repo root, must exit 0). When `--state` is supplied, the full gate
+derives `classic` or `graph` from that workflow state and rejects an obligations
+artifact recorded for the other mode. A spec with budget, retry, or
+report-aggregation logic must declare integration invariants — green unit tests
+do not satisfy it on their own.
 
 There is exactly one `verify-command`: the pass/fail signal the gate depends
 on. A spec may also declare a `## Test Count Command` and
@@ -83,7 +87,7 @@ refused at `init`.
 - `classic` uses `classic-loop`: Implementation, a real configured verification
   command, bounded Fix and Re-verification, then Completion. If its feature
   spec declares `## Plan Obligations`, those obligations must be extracted and
-  approved before a downstream check consumes them.
+  approved before the aggregate gate can pass.
 - `graph` uses `graph-delivery`: Research, Plan, reviewed plan obligations,
   developer approval of the proposed execution graph, Implementation, and the
   same verification loop. Set Research to `single` or `parallel`; add
@@ -141,11 +145,20 @@ Review the displayed extraction and approve that exact revision:
   --approval-text "<exact reviewer approval>"
 ```
 
-Before any downstream gate consumes obligations, run `plan-obligations.sh
-check` for the same mode and spec. Missing, malformed, stale, tampered, or
-unreviewed artifacts fail closed. Specs with no obligations and no prior
-artifact return `NOT_APPLICABLE`; Quick MVP is explicitly N/A. Never treat a
-missing artifact as Quick MVP merely because it is absent.
+The aggregate `agent-gate.sh --spec` runs `plan-obligations.sh check`
+automatically before acceptance/evidence verification. Use the standalone
+`check` command only when you want to inspect that contract earlier. Missing,
+malformed, stale, tampered, or unreviewed artifacts fail closed. When
+`agent-gate.sh` receives `--state`, it binds the check to the workflow state's
+mode. Specs with no active obligations and no prior obligations artifact return
+`NOT_APPLICABLE` before obligations-specific `specs/<feature>.md` path/slug
+rules are enforced; Quick MVP is explicitly N/A. Never treat a missing artifact
+as Quick MVP merely because it is absent.
+
+For existing Classic/Graph work, adding the first active Plan Obligation is an
+opt-in migration point: run `extract`, review the displayed revision, and run
+`approve` before expecting the full gate to pass. Specs without active
+obligations retain their previous gate behavior.
 
 ### Supervisor Loop
 
