@@ -3,6 +3,9 @@
 # shellcheck disable=SC2016 # jq programs are intentionally single-quoted.
 set -euo pipefail
 
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+descope_ledger="${here}/descope-ledger.sh"
+
 die() {
     echo "workflow-graph: $*" >&2
     exit 1
@@ -649,6 +652,10 @@ case "$command" in
               }
         ' > "$state" || { rm -f "$state"; die "invalid initial workflow configuration"; }
         validate_state_file "$state" || { rm -f "$state"; die "invalid initial workflow state"; }
+        if ! "$descope_ledger" init --state "$state" >/dev/null; then
+            rm -f "$state"
+            die "failed to initialize descope ledger"
+        fi
         dispatch_json
         ;;
 
@@ -1072,6 +1079,8 @@ case "$command" in
                 fi
                 blocker_json="null"
                 $blocker_set && blocker_json="$(jq -Rn --arg b "$blocker" '$b')"
+                descope_state="$($descope_ledger state --state "$state")" \
+                    || die "cannot write handoff while descope ledger is invalid"
                 feature="$(jq -r '.feature' "$state")"
                 at="$(now_utc)"
                 handoff_path="$(dirname "$state")/${feature}.handoff.json"
@@ -1080,6 +1089,8 @@ case "$command" in
                     --arg feature "$feature" --arg at "$at" --arg node "$node" \
                     --arg next "$next_step" --arg claim "$claim" \
                     --argjson changed "$changed_json" --argjson blocker "$blocker_json" \
+                    --argjson descopes "$(jq -c '.descopes' <<< "$descope_state")" \
+                    --argjson open_descope_ids "$(jq -c '.blocking_ids' <<< "$descope_state")" \
                     --slurpfile state "$state" '
                     {
                       schema_version: 1,
@@ -1091,7 +1102,9 @@ case "$command" in
                       blocker: $blocker,
                       claim: $claim,
                       workflow_status: $state[0].status,
-                      workflow_revision: $state[0].design_revision
+                      workflow_revision: $state[0].design_revision,
+                      descopes: $descopes,
+                      open_descope_ids: $open_descope_ids
                     }
                 ' > "$tmp" || { rm -f "$tmp"; die "failed to render handoff"; }
                 mv "$tmp" "$handoff_path"

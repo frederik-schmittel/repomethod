@@ -294,14 +294,13 @@ EOF
 @test "coverage warning text and exit status match at init and spec gate" {
     local warning_text="WARN: change touches frontend files but verify-command runs no JS check"
     printf 'true\n' > "${WORK}/.repomethod/verify-command"
-    mkdir -p "${WORK}/.repomethod/evidence" "${WORK}/src"
+    mkdir -p "${WORK}/.repomethod/evidence" "${WORK}/.repomethod/workflows" "${WORK}/src"
     cat > "${WORK}/specs/my-feature.md" <<'EOF'
 # Task: frontend warning
 
 ## Scope
 
 - `src/**`
-- `f.json`
 - `.repomethod/verify-command`
 
 ## Acceptance Criteria
@@ -324,7 +323,7 @@ EOF
     git add src/app.tsx
 
     run "${WORK}/.repomethod/scripts/feature-workflow.sh" classic init \
-        --feature demo --state "${WORK}/f.json" --base HEAD --verify-command true
+        --feature demo --state "${WORK}/.repomethod/workflows/demo.json" --base HEAD --verify-command true
     local init_status="$status"
     local init_warning
     init_warning="$(printf '%s\n' "$output" | grep -Fx "$warning_text")"

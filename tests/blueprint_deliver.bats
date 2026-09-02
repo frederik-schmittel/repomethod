@@ -20,6 +20,10 @@ printf '%s\n' "$*" > "$(dirname "$0")/gate.argv"
 [ -n "${GATE_ERR:-}" ] && printf '%s\n' "$GATE_ERR" >&2
 exit "${GATE_EXIT:-0}"
 EOF
+    cat > "${BIN}/descope-ledger.sh" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' '{"schema_version":1,"feature":"fixture","ledger":"fixture.descopes.jsonl","checkpoint":{"event_count":0,"tail_hash":"0000000000000000000000000000000000000000"},"descopes":[],"blocking_ids":[],"accepted_ids":[]}'
+EOF
     cat > "${BIN}/supervisor.sh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" > "$(dirname "$0")/sup.argv"
@@ -27,7 +31,7 @@ printf '%s\n' "$*" > "$(dirname "$0")/sup.argv"
 [ -n "${SUP_OUT:-}" ] && printf '%s' "$SUP_OUT"
 exit "${SUP_EXIT:-0}"
 EOF
-    chmod +x "${BIN}/agent-gate.sh" "${BIN}/supervisor.sh"
+    chmod +x "${BIN}/agent-gate.sh" "${BIN}/descope-ledger.sh" "${BIN}/supervisor.sh"
     DELIVER="${BIN}/deliver.sh"
     USAGE="DELIVERY: blocked — usage: deliver.sh --quick | --spec <spec> [--state <state>]"
 }
