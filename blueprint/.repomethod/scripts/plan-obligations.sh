@@ -7,7 +7,7 @@
 # feature-scoped JSON artifact. Stable IDs come from explicit anchors, never
 # from statement content. An extraction revision must be reviewed before any
 # downstream gate may consume it. `check` may omit --mode so aggregate gates
-# can validate either persistent delivery mode without guessing.
+# without workflow state can validate either persistent delivery mode.
 set -euo pipefail
 
 command="${1:-}"
@@ -77,36 +77,32 @@ fi
 [ -n "$spec" ] || { echo "error: --spec is required for $command" >&2; exit 1; }
 [ -f "$spec" ] || { echo "error: spec not found: $spec" >&2; exit 1; }
 [ ! -L "$spec" ] || { echo "error: spec must not be a symlink: $spec" >&2; exit 1; }
+
 spec_abs="$(cd "$(dirname "$spec")" && pwd -P)/$(basename "$spec")"
 case "$spec_abs" in
     "$repo_root"/*) plan_source="${spec_abs#"$repo_root"/}" ;;
     *) echo "error: spec must be inside the repository: $spec" >&2; exit 1 ;;
 esac
 
-[ "$(dirname "$plan_source")" = "specs" ] \
-    || { echo "error: plan source must be a top-level feature spec under specs/: $plan_source" >&2; exit 1; }
-
-feature="$(basename "$spec")"
-feature="${feature%.md}"
-[[ "$feature" =~ ^[a-z0-9][a-z0-9._-]*$ ]] \
-    || { echo "error: spec basename must be a feature slug: $feature" >&2; exit 1; }
-
-metadata_dir="${repo_root}/.repomethod"
-workflow_dir="${metadata_dir}/workflows"
-[ ! -L "$metadata_dir" ] || { echo "error: .repomethod must not be a symlink" >&2; exit 1; }
-[ ! -L "$workflow_dir" ] || { echo "error: .repomethod/workflows must not be a symlink" >&2; exit 1; }
-artifact="${workflow_dir}/${feature}.plan-obligations.json"
-[ ! -L "$artifact" ] || { echo "error: plan obligations artifact must not be a symlink" >&2; exit 1; }
-
-# A near-miss heading must never silently disable the contract on first use.
-# Anything that looks like a level-two Plan/Oblig... heading must be the exact
-# canonical heading below.
+# Detect only headings that actually try to be "Plan Obligations". This avoids
+# false positives such as "Deployment Plan and Rollout Obligations" while still
+# failing closed on wrong heading levels, casing, a trailing colon, or a simple
+# parenthetical qualifier.
 while IFS= read -r heading; do
-    [ "$heading" = "## Plan Obligations" ] || {
+    heading_canonical="$heading"
+    while [[ "$heading_canonical" == *[[:space:]] ]]; do
+        heading_canonical="${heading_canonical%?}"
+    done
+    [ "$heading_canonical" = "## Plan Obligations" ] || {
         echo "error: malformed Plan Obligations heading: $heading (expected exactly: ## Plan Obligations)" >&2
         exit 1
     }
-done < <(grep -iE '^##[^#]*plan[^#]*oblig' "$spec_abs" || true)
+done < <(
+    grep -iE \
+        -e '^#{1,6}[[:space:]]+plan obligations[[:space:]:]*$' \
+        -e '^#{1,6}[[:space:]]+plan obligations[[:space:]]+\([^)]*\)[[:space:]]*$' \
+        "$spec_abs" || true
+)
 
 section_count="$(grep -cE '^## Plan Obligations[[:space:]]*$' "$spec_abs" || true)"
 [ "$section_count" -le 1 ] || {
@@ -201,6 +197,47 @@ parse_obligations() {
     fi
 }
 
+parse_obligations
+jq -s '.' "$parsed" > "$new_core"
+obligation_count="$(jq 'length' "$new_core")"
+
+feature="$(basename "$spec")"
+feature="${feature%.md}"
+feature_is_slug=false
+if [[ "$feature" =~ ^[a-z0-9][a-z0-9._-]*$ ]]; then
+    feature_is_slug=true
+fi
+
+metadata_dir="${repo_root}/.repomethod"
+workflow_dir="${metadata_dir}/workflows"
+artifact=""
+artifact_exists=false
+if [ "$feature_is_slug" = true ]; then
+    artifact="${workflow_dir}/${feature}.plan-obligations.json"
+    [ -e "$artifact" ] && artifact_exists=true
+fi
+
+# Backward compatibility: a spec that does not declare obligations and has no
+# prior obligations artifact remains N/A before the obligations-specific
+# specs/<slug>.md convention is enforced. Existing verifier path flexibility is
+# therefore unchanged for repositories that do not opt into this contract.
+if [ "$command" != "approve" ] && [ "$obligation_count" -eq 0 ] && [ "$artifact_exists" = false ]; then
+    echo "NOT_APPLICABLE: spec declares no plan obligations"
+    exit 0
+fi
+
+# From here on the command needs a stable feature-scoped artifact path, so the
+# canonical RepoMethod feature-spec convention is required.
+[ "$(dirname "$plan_source")" = "specs" ] \
+    || { echo "error: plan obligations require a top-level feature spec under specs/: $plan_source" >&2; exit 1; }
+[ "$feature_is_slug" = true ] \
+    || { echo "error: plan obligations require a lowercase feature slug basename: $feature" >&2; exit 1; }
+
+[ ! -L "$metadata_dir" ] || { echo "error: .repomethod must not be a symlink" >&2; exit 1; }
+[ ! -L "$workflow_dir" ] || { echo "error: .repomethod/workflows must not be a symlink" >&2; exit 1; }
+artifact="${workflow_dir}/${feature}.plan-obligations.json"
+[ ! -L "$artifact" ] || { echo "error: plan obligations artifact must not be a symlink" >&2; exit 1; }
+
 validate_artifact() {
     local file="$1"
     jq -e '
@@ -240,8 +277,6 @@ validate_artifact() {
     ' "$file" >/dev/null 2>&1
 }
 
-parse_obligations
-jq -s '.' "$parsed" > "$new_core"
 canonical="$(jq -r 'sort_by(.id)[] | [.anchor,.type,.text] | @tsv' "$new_core")"
 source_digest="$(printf '%s' "$canonical" | git hash-object --stdin)"
 
@@ -262,10 +297,6 @@ artifact_matches_source() {
 case "$command" in
     check)
         if [ ! -f "$artifact" ]; then
-            if [ "$(jq 'length' "$new_core")" -eq 0 ]; then
-                echo "NOT_APPLICABLE: spec declares no plan obligations"
-                exit 0
-            fi
             echo "error: current plan obligations artifact is missing: ${artifact#"$repo_root"/}" >&2
             exit 1
         fi
@@ -274,7 +305,7 @@ case "$command" in
             exit 1
         }
         artifact_matches_source "$artifact" || {
-            echo "error: plan obligations artifact is stale or does not match the current spec" >&2
+            echo "error: plan obligations artifact is stale or does not match the current spec or workflow mode" >&2
             exit 1
         }
         [ "$(jq -r '.review.status' "$artifact")" = "approved" ] || {
@@ -414,11 +445,8 @@ case "$command" in
             exit 0
         fi
 
-        if [ "$(jq 'length' "$new_core")" -eq 0 ]; then
-            echo "NOT_APPLICABLE: spec declares no plan obligations"
-            exit 0
-        fi
-
+        # The N/A case returned before artifact-path validation. Reaching this
+        # branch therefore means at least one declared obligation exists.
         mkdir -p "$(dirname "$artifact")"
         artifact_tmp="$(mktemp "${artifact}.tmp.XXXXXX")"
         diff_json="$(jq -n --slurpfile new "$new_core" '{added:$new[0],removed:[],changed:[]}')"
