@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# plan-obligations.sh <extract|approve|check> --mode <quick-mvp|classic|graph>
+# plan-obligations.sh <extract|approve|check> [--mode <quick-mvp|classic|graph>]
 #   [--spec <spec.md>] [--repo <dir>]
 #   [--revision <n>] [--approval-text <text>]
 #
 # Extracts explicitly declared plan obligations from a feature spec into a
 # feature-scoped JSON artifact. Stable IDs come from explicit anchors, never
 # from statement content. An extraction revision must be reviewed before any
-# downstream gate may consume it.
+# downstream gate may consume it. `check` may omit --mode so aggregate gates
+# can validate either persistent delivery mode without guessing.
 set -euo pipefail
 
 command="${1:-}"
 [ -n "$command" ] || {
-    echo "usage: plan-obligations.sh <extract|approve|check> --mode <quick-mvp|classic|graph> [--spec <spec.md>] [--repo <dir>] [--revision <n>] [--approval-text <text>]" >&2
+    echo "usage: plan-obligations.sh <extract|approve|check> [--mode <quick-mvp|classic|graph>] [--spec <spec.md>] [--repo <dir>] [--revision <n>] [--approval-text <text>]" >&2
     exit 1
 }
 shift
@@ -40,8 +41,21 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-case "$command" in extract|approve|check) ;; *) echo "error: unknown command: $command" >&2; exit 1 ;; esac
-case "$mode" in quick-mvp|classic|graph) ;; *) echo "error: --mode must be quick-mvp, classic, or graph" >&2; exit 1 ;; esac
+case "$command" in
+    extract|approve|check) ;;
+    *) echo "error: unknown command: $command" >&2; exit 1 ;;
+esac
+
+if [ -n "$mode" ]; then
+    case "$mode" in
+        quick-mvp|classic|graph) ;;
+        *) echo "error: --mode must be quick-mvp, classic, or graph" >&2; exit 1 ;;
+    esac
+elif [ "$command" != "check" ]; then
+    echo "error: --mode is required for $command" >&2
+    exit 1
+fi
+
 [ -d "$repo" ] || { echo "error: repo not found: $repo" >&2; exit 1; }
 repo_root="$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null)" \
     || { echo "error: $repo is not inside a Git repository" >&2; exit 1; }
@@ -60,7 +74,7 @@ if [ "$mode" = "quick-mvp" ]; then
     esac
 fi
 
-[ -n "$spec" ] || { echo "error: --spec is required for $mode $command" >&2; exit 1; }
+[ -n "$spec" ] || { echo "error: --spec is required for $command" >&2; exit 1; }
 [ -f "$spec" ] || { echo "error: spec not found: $spec" >&2; exit 1; }
 [ ! -L "$spec" ] || { echo "error: spec must not be a symlink: $spec" >&2; exit 1; }
 spec_abs="$(cd "$(dirname "$spec")" && pwd -P)/$(basename "$spec")"
@@ -84,46 +98,80 @@ workflow_dir="${metadata_dir}/workflows"
 artifact="${workflow_dir}/${feature}.plan-obligations.json"
 [ ! -L "$artifact" ] || { echo "error: plan obligations artifact must not be a symlink" >&2; exit 1; }
 
+# A near-miss heading must never silently disable the contract on first use.
+# Anything that looks like a level-two Plan/Oblig... heading must be the exact
+# canonical heading below.
+while IFS= read -r heading; do
+    [ "$heading" = "## Plan Obligations" ] || {
+        echo "error: malformed Plan Obligations heading: $heading (expected exactly: ## Plan Obligations)" >&2
+        exit 1
+    }
+done < <(grep -iE '^##[^#]*plan[^#]*oblig' "$spec_abs" || true)
+
 section_count="$(grep -cE '^## Plan Obligations[[:space:]]*$' "$spec_abs" || true)"
-[ "$section_count" -le 1 ] || { echo "error: malformed ## Plan Obligations section (expected at most one heading)" >&2; exit 1; }
+[ "$section_count" -le 1 ] || {
+    echo "error: malformed ## Plan Obligations section (expected at most one heading)" >&2
+    exit 1
+}
+
+parsed=""
+old_core=""
+new_core=""
+compare_core=""
+old_obligations=""
+reviewed_new=""
+artifact_tmp=""
+
+cleanup() {
+    local file
+    for file in "$parsed" "$old_core" "$new_core" "$compare_core" \
+        "$old_obligations" "$reviewed_new" "$artifact_tmp"; do
+        if [ -n "$file" ]; then rm -f -- "$file"; fi
+    done
+    return 0
+}
+trap cleanup EXIT
 
 parsed="$(mktemp "${TMPDIR:-/tmp}/repomethod-plan-obligations.parsed.XXXXXX")"
 old_core="$(mktemp "${TMPDIR:-/tmp}/repomethod-plan-obligations.old.XXXXXX")"
 new_core="$(mktemp "${TMPDIR:-/tmp}/repomethod-plan-obligations.new.XXXXXX")"
-trap 'rm -f -- "$parsed" "$old_core" "$new_core"' EXIT
+compare_core="$(mktemp "${TMPDIR:-/tmp}/repomethod-plan-obligations.compare.XXXXXX")"
 
 parse_obligations() {
     : > "$parsed"
     [ "$section_count" -eq 1 ] || return 0
 
-    local raw line trimmed in_comment=false anchor type text line_re
+    local raw line comment_view in_comment=false anchor type text line_re
     local -A seen=()
+    # Literal backticks are part of the declaration grammar, not command
+    # substitutions.
+    # shellcheck disable=SC2016
     line_re='^- `([a-z0-9][a-z0-9._-]*)` \[(shape|behaviour|prohibition|process)\] (.+)$'
 
     while IFS= read -r raw || [ -n "$raw" ]; do
         line="${raw%$'\r'}"
-        trimmed="$line"
-        while [[ "$trimmed" == [[:space:]]* ]]; do trimmed="${trimmed#?}"; done
-        while [[ "$trimmed" == *[[:space:]] ]]; do trimmed="${trimmed%?}"; done
+        while [[ "$line" == *[[:space:]] ]]; do line="${line%?}"; done
+        comment_view="$line"
+        while [[ "$comment_view" == [[:space:]]* ]]; do comment_view="${comment_view#?}"; done
 
         if [ "$in_comment" = true ]; then
-            case "$trimmed" in *'-->'*) in_comment=false ;; esac
+            case "$comment_view" in *'-->'*) in_comment=false ;; esac
             continue
         fi
-        case "$trimmed" in
+        case "$comment_view" in
             '') continue ;;
             '<!--'*'-->') continue ;;
             '<!--'*) in_comment=true; continue ;;
         esac
 
-        if [[ ! "$trimmed" =~ $line_re ]]; then
-            echo "error: malformed Plan Obligations declaration: $trimmed" >&2
+        if [[ ! "$line" =~ $line_re ]]; then
+            echo "error: malformed Plan Obligations declaration: $line" >&2
+            echo 'expected: - `<anchor>` [shape|behaviour|prohibition|process] <statement>' >&2
             return 1
         fi
         anchor="${BASH_REMATCH[1]}"
         type="${BASH_REMATCH[2]}"
         text="${BASH_REMATCH[3]}"
-        [ -n "$text" ] || { echo "error: empty Plan Obligations statement for $anchor" >&2; return 1; }
         if [ -n "${seen[$anchor]:-}" ]; then
             echo "error: duplicate Plan Obligations anchor/id collision: $anchor" >&2
             return 1
@@ -158,7 +206,7 @@ validate_artifact() {
         and (.feature | type == "string" and test("^[a-z0-9][a-z0-9._-]*$"))
         and (.mode == "classic" or .mode == "graph")
         and (.plan_source | type == "string" and length > 0)
-        and (.source_digest | type == "string" and test("^[0-9a-f]{40}$"))
+        and (.source_digest | type == "string" and test("^([0-9a-f]{40}|[0-9a-f]{64})$"))
         and (.revision | type == "number" and floor == . and . >= 1)
         and (.review | type == "object")
         and (.review.status == "pending" or .review.status == "approved")
@@ -168,7 +216,7 @@ validate_artifact() {
                 (.review.approved_at == null and .review.approval_text == null)
             else
                 (.review.approved_at | type == "string" and length > 0)
-                and (.review.approval_text | type == "string" and length > 0)
+                and (.review.approval_text | type == "string" and test("[^[:space:]]"))
             end
         )
         and (.obligations | type == "array")
@@ -199,15 +247,14 @@ artifact_matches_source() {
     local file="$1"
     validate_artifact "$file" || return 1
     [ "$(jq -r '.feature' "$file")" = "$feature" ] || return 1
-    [ "$(jq -r '.mode' "$file")" = "$mode" ] || return 1
+    if [ -n "$mode" ] && [ "$mode" != "quick-mvp" ]; then
+        [ "$(jq -r '.mode' "$file")" = "$mode" ] || return 1
+    fi
     [ "$(jq -r '.plan_source' "$file")" = "$plan_source" ] || return 1
     [ "$(jq -r '.source_digest' "$file")" = "$source_digest" ] || return 1
     jq '[.obligations[] | {id,anchor,source_ref,type,text}] | sort_by(.id)' "$file" > "$old_core"
-    jq '[.[] | {id,anchor,source_ref,type,text}] | sort_by(.id)' "$new_core" > "${new_core}.compare"
-    cmp -s "$old_core" "${new_core}.compare"
-    local rc=$?
-    rm -f -- "${new_core}.compare"
-    return "$rc"
+    jq '[.[] | {id,anchor,source_ref,type,text}] | sort_by(.id)' "$new_core" > "$compare_core"
+    cmp -s "$old_core" "$compare_core"
 }
 
 case "$command" in
@@ -220,10 +267,18 @@ case "$command" in
             echo "error: current plan obligations artifact is missing: ${artifact#"$repo_root"/}" >&2
             exit 1
         fi
-        validate_artifact "$artifact" || { echo "error: invalid plan obligations artifact: ${artifact#"$repo_root"/}" >&2; exit 1; }
-        artifact_matches_source "$artifact" || { echo "error: plan obligations artifact is stale or does not match the current spec" >&2; exit 1; }
-        [ "$(jq -r '.review.status' "$artifact")" = "approved" ] \
-            || { echo "error: plan obligations revision $(jq -r '.revision' "$artifact") is not approved" >&2; exit 1; }
+        validate_artifact "$artifact" || {
+            echo "error: invalid plan obligations artifact: ${artifact#"$repo_root"/}" >&2
+            exit 1
+        }
+        artifact_matches_source "$artifact" || {
+            echo "error: plan obligations artifact is stale or does not match the current spec" >&2
+            exit 1
+        }
+        [ "$(jq -r '.review.status' "$artifact")" = "approved" ] || {
+            echo "error: plan obligations revision $(jq -r '.revision' "$artifact") is not approved" >&2
+            exit 1
+        }
         if jq -e 'any(.obligations[]; .review_status != "approved")' "$artifact" >/dev/null; then
             echo "error: plan obligations artifact contains unreviewed obligations" >&2
             exit 1
@@ -232,34 +287,63 @@ case "$command" in
         ;;
 
     approve)
-        [ -f "$artifact" ] || { echo "error: plan obligations artifact is missing: ${artifact#"$repo_root"/}" >&2; exit 1; }
-        validate_artifact "$artifact" || { echo "error: invalid plan obligations artifact: ${artifact#"$repo_root"/}" >&2; exit 1; }
-        artifact_matches_source "$artifact" || { echo "error: cannot approve stale plan obligations extraction" >&2; exit 1; }
-        case "$revision" in ''|*[!0-9]*) echo "error: --revision must be a positive integer" >&2; exit 1 ;; esac
+        [ -f "$artifact" ] || {
+            echo "error: plan obligations artifact is missing: ${artifact#"$repo_root"/}" >&2
+            exit 1
+        }
+        validate_artifact "$artifact" || {
+            echo "error: invalid plan obligations artifact: ${artifact#"$repo_root"/}" >&2
+            exit 1
+        }
+        artifact_matches_source "$artifact" || {
+            echo "error: cannot approve stale plan obligations extraction" >&2
+            exit 1
+        }
+        case "$revision" in
+            ''|*[!0-9]*) echo "error: --revision must be a positive integer" >&2; exit 1 ;;
+        esac
         [ "$revision" -gt 0 ] || { echo "error: --revision must be a positive integer" >&2; exit 1; }
-        [ "$revision" = "$(jq -r '.revision' "$artifact")" ] \
-            || { echo "error: displayed revision $revision is stale; current revision is $(jq -r '.revision' "$artifact")" >&2; exit 1; }
-        [ -n "$approval_text" ] || { echo "error: --approval-text is required" >&2; exit 1; }
+        [ "$revision" = "$(jq -r '.revision' "$artifact")" ] || {
+            echo "error: displayed revision $revision is stale; current revision is $(jq -r '.revision' "$artifact")" >&2
+            exit 1
+        }
+        [[ "$approval_text" =~ [^[:space:]] ]] || {
+            echo "error: --approval-text must contain non-whitespace review evidence" >&2
+            exit 1
+        }
         approved_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        tmp="$(mktemp "${artifact}.tmp.XXXXXX")"
+        artifact_tmp="$(mktemp "${artifact}.tmp.XXXXXX")"
         jq --arg at "$approved_at" --arg text "$approval_text" '
             .review = {status:"approved",revision:.revision,approved_at:$at,approval_text:$text}
             | .obligations |= map(.review_status = "approved")
-        ' "$artifact" > "$tmp"
-        validate_artifact "$tmp" || { rm -f "$tmp"; echo "error: approval would create an invalid plan obligations artifact" >&2; exit 1; }
-        mv "$tmp" "$artifact"
+        ' "$artifact" > "$artifact_tmp"
+        validate_artifact "$artifact_tmp" || {
+            echo "error: approval would create an invalid plan obligations artifact" >&2
+            exit 1
+        }
+        mv "$artifact_tmp" "$artifact"
+        artifact_tmp=""
         echo "APPROVED: plan obligations revision $revision"
         ;;
 
     extract)
         if [ -f "$artifact" ]; then
-            validate_artifact "$artifact" || { echo "error: invalid existing plan obligations artifact: ${artifact#"$repo_root"/}" >&2; exit 1; }
-            [ "$(jq -r '.feature' "$artifact")" = "$feature" ] \
-                || { echo "error: existing artifact feature does not match spec feature" >&2; exit 1; }
-            [ "$(jq -r '.mode' "$artifact")" = "$mode" ] \
-                || { echo "error: existing artifact mode does not match --mode" >&2; exit 1; }
-            [ "$(jq -r '.plan_source' "$artifact")" = "$plan_source" ] \
-                || { echo "error: existing artifact plan source does not match --spec" >&2; exit 1; }
+            validate_artifact "$artifact" || {
+                echo "error: invalid existing plan obligations artifact: ${artifact#"$repo_root"/}" >&2
+                exit 1
+            }
+            [ "$(jq -r '.feature' "$artifact")" = "$feature" ] || {
+                echo "error: existing artifact feature does not match spec feature" >&2
+                exit 1
+            }
+            [ "$(jq -r '.mode' "$artifact")" = "$mode" ] || {
+                echo "error: existing artifact mode does not match --mode" >&2
+                exit 1
+            }
+            [ "$(jq -r '.plan_source' "$artifact")" = "$plan_source" ] || {
+                echo "error: existing artifact plan source does not match --spec" >&2
+                exit 1
+            }
 
             if artifact_matches_source "$artifact"; then
                 echo "UNCHANGED: plan obligations revision $(jq -r '.revision' "$artifact") ($(jq -r '.review.status' "$artifact"))"
@@ -269,9 +353,9 @@ case "$command" in
             old_revision="$(jq -r '.revision' "$artifact")"
             next_revision=$((old_revision + 1))
             old_obligations="$(mktemp "${TMPDIR:-/tmp}/repomethod-plan-obligations.old-obligations.XXXXXX")"
+            reviewed_new="$(mktemp "${TMPDIR:-/tmp}/repomethod-plan-obligations.reviewed.XXXXXX")"
             jq '.obligations' "$artifact" > "$old_obligations"
 
-            reviewed_new="$(mktemp "${TMPDIR:-/tmp}/repomethod-plan-obligations.reviewed.XXXXXX")"
             jq --slurpfile old "$old_obligations" '
                 ($old[0] | map({key:.id,value:.}) | from_entries) as $old_by_id
                 | map(.review_status = (
@@ -300,7 +384,7 @@ case "$command" in
             ')"
 
             mkdir -p "$(dirname "$artifact")"
-            tmp="$(mktemp "${artifact}.tmp.XXXXXX")"
+            artifact_tmp="$(mktemp "${artifact}.tmp.XXXXXX")"
             jq -n \
                 --arg feature "$feature" --arg mode "$mode" --arg source "$plan_source" \
                 --arg digest "$source_digest" --argjson revision "$next_revision" \
@@ -316,10 +400,13 @@ case "$command" in
                     obligations:$obligations[0],
                     revision_diff:$revision_diff
                 }
-            ' > "$tmp"
-            rm -f -- "$old_obligations" "$reviewed_new"
-            validate_artifact "$tmp" || { rm -f "$tmp"; echo "error: extraction produced an invalid plan obligations artifact" >&2; exit 1; }
-            mv "$tmp" "$artifact"
+            ' > "$artifact_tmp"
+            validate_artifact "$artifact_tmp" || {
+                echo "error: extraction produced an invalid plan obligations artifact" >&2
+                exit 1
+            }
+            mv "$artifact_tmp" "$artifact"
+            artifact_tmp=""
             echo "EXTRACTED: revision $next_revision pending review"
             jq -c '.revision_diff' "$artifact"
             exit 0
@@ -331,7 +418,7 @@ case "$command" in
         fi
 
         mkdir -p "$(dirname "$artifact")"
-        tmp="$(mktemp "${artifact}.tmp.XXXXXX")"
+        artifact_tmp="$(mktemp "${artifact}.tmp.XXXXXX")"
         diff_json="$(jq -n --slurpfile new "$new_core" '{added:$new[0],removed:[],changed:[]}')"
         jq -n \
             --arg feature "$feature" --arg mode "$mode" --arg source "$plan_source" \
@@ -348,9 +435,13 @@ case "$command" in
                 obligations:$obligations[0],
                 revision_diff:$revision_diff
             }
-        ' > "$tmp"
-        validate_artifact "$tmp" || { rm -f "$tmp"; echo "error: extraction produced an invalid plan obligations artifact" >&2; exit 1; }
-        mv "$tmp" "$artifact"
+        ' > "$artifact_tmp"
+        validate_artifact "$artifact_tmp" || {
+            echo "error: extraction produced an invalid plan obligations artifact" >&2
+            exit 1
+        }
+        mv "$artifact_tmp" "$artifact"
+        artifact_tmp=""
         echo "EXTRACTED: revision 1 pending review"
         jq -c '.revision_diff' "$artifact"
         ;;

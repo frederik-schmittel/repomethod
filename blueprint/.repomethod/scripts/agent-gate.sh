@@ -3,10 +3,10 @@
 # agent-gate.sh --quick [--base <b>] [--report <r>]
 #
 # Full gate (classic/graph): runs verify, verify-scope, verify-forbidden,
-# verify-acceptance, verify-evidence, verify-report, and verify-invariants in
-# order and trusts only their exit status. Every argument comes from a flag —
-# nothing is read from the environment. --spec has no default and fails closed
-# if omitted.
+# plan-obligations, verify-acceptance, verify-evidence, verify-report, and
+# verify-invariants in order and trusts only their exit status. Every argument
+# comes from a flag — nothing is read from the environment. --spec has no
+# default and fails closed if omitted.
 #
 # Quick gate (quick-mvp close-out): runs verify, checks that no protected
 # zone was touched, and checks that the evidence report exists and is not
@@ -25,8 +25,6 @@ resolve_base() {
     local dir="${1:-.}" mb ref up cur
     up="$(git -C "$dir" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
     cur="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-    # <remote>/<same-branch> is this branch's own pushed copy, not a fork
-    # point — skip it and fall through to origin/HEAD, then main.
     if [ -n "$up" ] && [ "${up#*/}" != "$cur" ]; then
         if mb="$(git -C "$dir" merge-base HEAD "$up" 2>/dev/null)" && [ -n "$mb" ]; then
             printf '%s\n' "$mb"
@@ -58,23 +56,15 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-# --state carries the workflow's pinned config.base_ref (read by verify-scope).
-# It only makes sense for the full, spec-driven gate.
 if [ "$QUICK" = true ] && [ -n "$STATE" ]; then
     echo "--state is only valid with --spec" >&2
     exit 1
 fi
-
-# --spec has no default and fails closed if omitted. Checked before the preflight
-# so a missing spec is still the first thing reported.
 if [ "$QUICK" != true ] && [ -z "$SPEC" ]; then
     echo "error: --spec is required" >&2
     exit 1
 fi
 
-# Environment preflight: after argument validation, before any base resolution
-# or verify.sh, for both the quick and the spec gate. A hard finding aborts here
-# with preflight's own exit status.
 "${here}/preflight.sh" --quiet || exit $?
 
 if [ "$QUICK" = true ]; then
@@ -89,9 +79,6 @@ if [ "$QUICK" = true ]; then
     exit 0
 fi
 
-# Base authority is verify-scope's. An explicit --base wins and keeps its
-# diagnostics; otherwise forward --state so verify-scope reads config.base_ref;
-# with neither, verify-scope falls back to its own resolve_base.
 scope_base_args=()
 if [ -n "$BASE" ]; then
     scope_base_args=(--base "$BASE")
@@ -102,6 +89,7 @@ fi
 "${here}/verify.sh" --warn-frontend-uncovered .
 "${here}/verify-scope.sh" --spec "$SPEC" "${scope_base_args[@]}" --repo .
 "${here}/verify-forbidden.sh" --spec "$SPEC" --repo .
+"${here}/plan-obligations.sh" check --spec "$SPEC" --repo .
 "${here}/verify-acceptance.sh" --spec "$SPEC" --report "$REPORT"
 "${here}/verify-evidence.sh" --spec "$SPEC"
 "${here}/verify-report.sh" --spec "$SPEC" --report "$REPORT"
