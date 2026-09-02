@@ -86,8 +86,8 @@ esac
 
 # Detect only headings that actually try to be "Plan Obligations". This avoids
 # false positives such as "Deployment Plan and Rollout Obligations" while still
-# failing closed on wrong heading levels, casing, a trailing colon, or a simple
-# parenthetical qualifier.
+# failing closed on wrong heading levels, casing, a trailing colon, a simple
+# qualifier, or the common one-character spelling slip "Obligatons".
 while IFS= read -r heading; do
     heading_canonical="$heading"
     while [[ "$heading_canonical" == *[[:space:]] ]]; do
@@ -101,6 +101,7 @@ done < <(
     grep -iE \
         -e '^#{1,6}[[:space:]]+plan obligations[[:space:]:]*$' \
         -e '^#{1,6}[[:space:]]+plan obligations[[:space:]]+\([^)]*\)[[:space:]]*$' \
+        -e '^#{1,6}[[:space:]]+plan obligatons[[:space:]:]*$' \
         "$spec_abs" || true
 )
 
@@ -445,8 +446,6 @@ case "$command" in
             exit 0
         fi
 
-        # The N/A case returned before artifact-path validation. Reaching this
-        # branch therefore means at least one declared obligation exists.
         mkdir -p "$(dirname "$artifact")"
         artifact_tmp="$(mktemp "${artifact}.tmp.XXXXXX")"
         diff_json="$(jq -n --slurpfile new "$new_core" '{added:$new[0],removed:[],changed:[]}')"
