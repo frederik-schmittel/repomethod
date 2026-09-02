@@ -22,6 +22,7 @@ Manage repository skills only through `.repomethod/scripts/manage-skills.sh`.
 ```bash
 .repomethod/scripts/verify.sh .            # runs .repomethod/verify-command
 .repomethod/scripts/verify-scope.sh --spec <spec> --repo .
+.repomethod/scripts/verify-forbidden.sh --spec <spec> --repo .
 .repomethod/scripts/verify-acceptance.sh --spec <spec> --report .repomethod/evidence/report.md
 .repomethod/scripts/verify-evidence.sh --spec <spec>
 .repomethod/scripts/verify-report.sh --spec <spec> --report .repomethod/evidence/report.md
@@ -41,13 +42,14 @@ state-aware gate (`agent-gate.sh --spec <spec> --state <file>`, and the
 supervisor) then reuses that pinned SHA instead of re-resolving. An explicit
 `--base` still wins and keeps its staleness diagnostics.
 
-`agent-gate.sh --spec` also runs `verify-report` (the acceptance report must
-name its spec, and if the spec declares a `## Test Count Command` its
-`Tests: <n>` line must match that command's current output) and
-`verify-invariants` (every `## Integration Invariants` bullet, run from the
-repo root, must exit 0). A spec with budget, retry, or report-aggregation
-logic must declare integration invariants — green unit tests do not satisfy
-it on their own.
+`agent-gate.sh --spec` also runs `verify-forbidden` (the optional
+`## Must Not Exist` section is enforced inside the declared Scope),
+`verify-report` (the acceptance report must name its spec, and if the spec
+declares a `## Test Count Command` its `Tests: <n>` line must match that
+command's current output), and `verify-invariants` (every
+`## Integration Invariants` bullet, run from the repo root, must exit 0). A
+spec with budget, retry, or report-aggregation logic must declare integration
+invariants — green unit tests do not satisfy it on their own.
 
 There is exactly one `verify-command`: the pass/fail signal the gate depends
 on. A spec may also declare a `## Test Count Command` and
@@ -134,6 +136,15 @@ Paths matching `.repomethod/protected-zones.txt` require an exact path in
 the active spec Scope. Stop before changing an undeclared protected path.
 `quick-mvp` has no spec and therefore may not touch a protected path at all —
 switch to `classic` or `graph` with a spec if it must.
+
+An optional `## Must Not Exist` section adds deterministic negative
+requirements. A backticked declaration is a fixed string by default; use
+the explicit `regex:` prefix only when POSIX extended regular-expression
+matching is intended. `verify-forbidden.sh` searches tracked and non-ignored
+untracked regular files whose repository-relative paths match `Scope`, including
+pre-existing code. It scans contents verbatim, so comments and docstrings count
+as matches. Unknown file types are scanned rather than skipped, and scoped
+symlinks or other non-regular Git entries fail closed.
 
 `.repomethod/scope-ignore.txt` (one glob per line, `#` and blank lines skipped)
 drops matching paths from the scope check; protected zones still win.

@@ -60,8 +60,9 @@ is missing, or the repository's own tests fail, delivery fails — one
   **Graph** — driven by `.repomethod/scripts/feature-workflow.sh`;
 - the repository's own verification command (`.repomethod/verify-command`),
   made mandatory by the completion gate;
-- deterministic gates for scope, acceptance criteria, evidence, protected
-  paths, and that verification command, closed out with one command;
+- deterministic gates for scope, forbidden content, acceptance criteria,
+  evidence, protected paths, and that verification command, closed out with
+  one command;
 - persistent workflow state a second host can resume from a clean checkout;
 - a manifest-aware install / update / uninstall lifecycle that preserves
   managed files you have edited.
@@ -73,7 +74,7 @@ coding agent
     ↓  AGENTS.md / CLAUDE.md pointer block
 .repomethod/AGENTS.md            the contract every agent reads
     ↓  workflow state + spec
-real shell verification          scope · acceptance · evidence · verify-command
+real shell verification          scope · prohibitions · acceptance · evidence · verify-command
     ↓
 deterministic delivery verdict   done | blocked | incomplete
 ```
@@ -116,10 +117,28 @@ structural gates and trusts only their exit status:
 - `verify.sh` — the configured command;
 - `verify-scope.sh` — committed, staged, unstaged, and untracked files stay
   inside the spec's Scope and off protected paths;
+- `verify-forbidden.sh` — an optional `## Must Not Exist` section rejects
+  forbidden content in files whose paths match the spec's Scope;
 - `verify-acceptance.sh` and `verify-evidence.sh` — every criterion is checked
   and every referenced evidence file exists and is non-empty;
 - `verify-report.sh` and `verify-invariants.sh` — enforced only when the spec
   declares a test-count command or integration invariants.
+
+`Must Not Exist` declarations are fixed strings by default. Regular expressions
+require the explicit `regex:` prefix and use POSIX extended regular-expression
+syntax:
+
+```md
+## Must Not Exist
+
+- `legacy_api(`
+- regex: `legacy_[0-9]+\(`
+```
+
+The check scans tracked and non-ignored untracked regular files inside `Scope`,
+including pre-existing code. It scans file contents verbatim, so comments and
+docstrings count as matches. Unknown file types are scanned as well; scoped
+symlinks and other non-regular Git entries fail closed.
 
 `.repomethod/scripts/supervisor.sh check` turns a persisted workflow into a
 deterministic verdict — `done`, `continue`, `blocked`, `needs_human`, or

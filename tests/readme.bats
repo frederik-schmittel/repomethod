@@ -17,7 +17,7 @@ setup() {
 }
 
 @test "README documents every check the full gate runs" {
-    for s in verify.sh verify-scope.sh verify-acceptance.sh \
+    for s in verify.sh verify-scope.sh verify-forbidden.sh verify-acceptance.sh \
              verify-evidence.sh verify-report.sh verify-invariants.sh; do
         run grep -F -- "$s" "$README"
         [ "$status" -eq 0 ]
