@@ -12,7 +12,8 @@ setup() {
     git -C "$WORK" add seed
     git -C "$WORK" commit -q -m seed
     mkdir -p "$WORK/.repomethod/workflows"
-    STATE="${WORK}/demo.json"
+    # State lives where a real workflow keeps it; descope sidecars sit beside it.
+    STATE="${WORK}/.repomethod/workflows/demo.json"
     printf '{"feature":"demo","repo_root":"%s"}\n' "$WORK" > "$STATE"
     LEDGER_FILE="$WORK/.repomethod/workflows/demo.descopes.jsonl"
     CHECKPOINT_FILE="$WORK/.repomethod/workflows/demo.descopes.checkpoint.json"
@@ -100,7 +101,8 @@ add_descope() {
     printf '#!/usr/bin/env bash\nprintf '\''{"verdict":"done","reason":"workflow complete"}\\n'\''\n' > "$bin/supervisor.sh"
     chmod +x "$bin/"*.sh
     droot="$WORK/delivery-repo"; mkdir -p "$droot/.repomethod/workflows"; git -C "$droot" init -q -b main
-    dstate="$droot/delivery.json"; printf '{"feature":"delivery","repo_root":"%s"}\n' "$droot" > "$dstate"
+    dstate="$droot/.repomethod/workflows/delivery.json"
+    printf '{"feature":"delivery","repo_root":"%s"}\n' "$droot" > "$dstate"
     dledger="$droot/.repomethod/workflows/delivery.descopes.jsonl"
     "$bin/descope-ledger.sh" init --state "$dstate" >/dev/null
     "$bin/descope-ledger.sh" add --state "$dstate" --id descope.api --plan-ref obl.api --description omit --rationale bounded --owner dev >/dev/null
@@ -115,4 +117,35 @@ add_descope() {
     sed 's/bounded/tampered/' "$dledger" > "$dledger.tmp" && mv "$dledger.tmp" "$dledger"
     run "$bin/deliver.sh" --spec specs/x.md --state "$dstate"
     [ "$status" -eq 1 ]; [[ "$output" == *"hash mismatch"* ]]
+}
+
+@test "ledger works from a linked git worktree" {
+    git -C "$WORK" worktree add -q "$WORK/wt" -b wt
+    [ -f "$WORK/wt/.git" ]   # a linked worktree's .git is a file, not a directory
+    mkdir -p "$WORK/wt/.repomethod/workflows"
+    wstate="$WORK/wt/.repomethod/workflows/feature.json"
+    printf '{"feature":"feature","repo_root":"%s"}\n' "$WORK/wt" > "$wstate"
+
+    run "$LEDGER" init --state "$wstate"
+    [ "$status" -eq 0 ]
+    "$LEDGER" add --state "$wstate" --id descope.api --plan-ref obl.api \
+        --description omit --rationale bounded --owner dev >/dev/null
+    run "$LEDGER" state --state "$wstate"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.blocking_ids[0]' <<< "$output")" = descope.api ]
+    [ -f "$WORK/wt/.repomethod/workflows/feature.descopes.jsonl" ]
+}
+
+@test "a workflow with no ledger yields empty canonical state and lazily initializes" {
+    [ ! -e "$LEDGER_FILE" ]
+    run "$LEDGER" state --state "$STATE"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.descopes | length' <<< "$output")" = 0 ]
+    [ "$(jq -r '.blocking_ids | length' <<< "$output")" = 0 ]
+
+    add_descope descope.api obl.api
+    [ -f "$LEDGER_FILE" ]
+    [ -f "$CHECKPOINT_FILE" ]
+    run "$LEDGER" state --state "$STATE"
+    [ "$(jq -r '.blocking_ids[0]' <<< "$output")" = descope.api ]
 }

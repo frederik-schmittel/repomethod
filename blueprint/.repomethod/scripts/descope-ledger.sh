@@ -66,20 +66,19 @@ load_paths() {
 
     feature="$(jq -er '.feature | select(type == "string" and test("^[a-z0-9][a-z0-9._-]*$"))' "$state" 2>/dev/null)" \
         || fail "workflow state has an invalid feature slug: $state"
-    repo_root="$(jq -er '.repo_root | select(type == "string" and length > 0)' "$state" 2>/dev/null)" \
-        || fail "workflow state has no valid repo_root: $state"
-    [ -d "$repo_root/.git" ] || fail "workflow repo_root is not a git repository: $repo_root"
 
-    workflow_dir="${repo_root}/.repomethod/workflows"
-    if [ "$command" = "init" ]; then
-        mkdir -p "$workflow_dir"
-    fi
-    [ -d "$workflow_dir" ] || fail "workflow directory not found: $workflow_dir"
-    [ ! -L "${repo_root}/.repomethod" ] || fail "refusing symlinked .repomethod directory: ${repo_root}/.repomethod"
-    [ ! -L "$workflow_dir" ] || fail "refusing symlinked workflow directory: $workflow_dir"
+    # Descope files are sidecars of the workflow state, placed next to it just
+    # like the handoff sidecar (workflow-graph.sh: "$(dirname "$state")/..."). A
+    # committed workflow resumed from a fresh clone or a linked git worktree
+    # keeps its ledger beside its state wherever that path now is; there is no
+    # dependence on a recorded repo_root or on ".git" being a directory.
+    # refuse_symlinked_state already rejected a symlinked segment anywhere from
+    # this directory up to the repository root.
+    local state_dir
+    state_dir="$(cd "$(dirname "$state")" && pwd)"
 
-    ledger="${workflow_dir}/${feature}.descopes.jsonl"
-    checkpoint="${workflow_dir}/${feature}.descopes.checkpoint.json"
+    ledger="${state_dir}/${feature}.descopes.jsonl"
+    checkpoint="${state_dir}/${feature}.descopes.checkpoint.json"
     lock_dir="${checkpoint}.lock"
 
     [ ! -L "$ledger" ] || fail "descope ledger must not be a symlink: $ledger"
@@ -139,6 +138,18 @@ validate_checkpoint_shape() {
 }
 
 render_state() {
+    # A workflow created before this feature existed has no ledger yet. Emit the
+    # empty canonical state so handoff and delivery treat it as "no descopes
+    # recorded" instead of failing closed; `add` then lazily materializes the
+    # pair on first write. A half-present pair is corruption and still fails.
+    if [ ! -e "$ledger" ] && [ ! -e "$checkpoint" ]; then
+        jq -cnS --arg feature "$feature" --arg ledger "$(basename "$ledger")" \
+            --arg zero "$ZERO_HASH" '
+            {schema_version:1,feature:$feature,ledger:$ledger,
+             checkpoint:{event_count:0,tail_hash:$zero},
+             descopes:[],blocking_ids:[],accepted_ids:[]}'
+        return 0
+    fi
     [ -f "$ledger" ] || fail "descope ledger is missing: $ledger"
     [ -f "$checkpoint" ] || fail "descope checkpoint is missing: $checkpoint"
     validate_checkpoint_shape || fail "invalid descope checkpoint: $checkpoint"
@@ -235,6 +246,12 @@ append_event() {
     local event_without_hash="$1" hash event
     hash="$(printf '%s' "$event_without_hash" | git hash-object --stdin)"
     event="$(jq -cS --arg hash "$hash" '. + {hash:$hash}' <<< "$event_without_hash")"
+    # ponytail: non-atomic two-file append under a held lock. A crash between the
+    # ledger write and the checkpoint write leaves event_count one behind, and
+    # every later read then fails closed. The lock keeps the window tiny; both
+    # files are committed, so recovery is a `git diff`/`git checkout` on the
+    # pair. Upgrade path if this ever bites: a torn-tail reconciler in
+    # render_state that re-checkpoints a single chain-valid trailing event.
     printf '%s\n' "$event" >> "$ledger"
     write_checkpoint "$(jq -r '.seq' <<< "$event")" "$hash"
 }

@@ -80,7 +80,7 @@ normalize_gate_command() {
 case "$mode" in
     quick-mvp)
         assert_baseline_green false
-        cat <<'EOF_QUICK'
+        cat <<'EOF'
 quick-mvp workflow selected (no workflow state is created)
 1. Quick Plan: record Goal, Scope, Test in at most three bullets.
 2. Implement the smallest testable change in the current agent session using existing skills.
@@ -93,12 +93,12 @@ quick-mvp workflow selected (no workflow state is created)
 Plan obligations are not applicable in this stateless path.
 No research, graph state, subagents, packetization, or spec in this path.
 Stop before changes involving protected paths, architecture, or security decisions.
-EOF_QUICK
+EOF
         ;;
     classic)
         shift
         if [ "$#" -eq 0 ]; then
-            cat <<'EOF_CLASSIC'
+            cat <<'EOF'
 classic workflow selected
 Create a bounded implementation state with:
 .repomethod/scripts/feature-workflow.sh classic init --feature <slug> --verify-command ".repomethod/scripts/agent-gate.sh --spec specs/<slug>.md"
@@ -110,7 +110,7 @@ blocked while any current descope is unreviewed or rejected.
 Verification failures create a bounded Fix -> Verification loop.
 If the feature spec declares ## Plan Obligations, run plan-obligations.sh extract
 and approve the current extraction revision before any downstream check consumes it.
-EOF_CLASSIC
+EOF
             exit 0
         fi
         if [ "${1:-}" = "init" ]; then
@@ -125,7 +125,7 @@ EOF_CLASSIC
     graph)
         shift
         if [ "$#" -eq 0 ]; then
-            cat <<'EOF_GRAPH'
+            cat <<'EOF'
 graph workflow selected
 Research -> Plan -> obligation extraction/review -> execution graph approval -> Implementation -> Verification -> Completion.
 Initialization also creates the feature-scoped append-only descope ledger.
@@ -135,7 +135,7 @@ Declare normative statements in specs/<feature>.md under ## Plan Obligations.
 Run plan-obligations.sh extract after planning and approve that exact extraction
 revision before downstream checks consume it. Editing the section creates a new
 pending revision. Then preview and approve the execution graph as usual.
-EOF_GRAPH
+EOF
             exit 0
         fi
         if [ "${1:-}" = "init" ]; then
