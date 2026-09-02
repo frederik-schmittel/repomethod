@@ -83,7 +83,7 @@ teardown() {
     [ "$status" -eq 1 ]
 }
 
-@test "project CI runs the offline gate on Linux and macOS" {
+@test "project CI keeps cross-platform coverage and delegates repository-owned checks" {
     workflow="${REPO_ROOT}/.github/workflows/ci.yml"
     run grep -F "ubuntu-latest" "$workflow"
     [ "$status" -eq 0 ]
@@ -97,9 +97,9 @@ teardown() {
     [ "$status" -eq 0 ]
     run grep -F "actions/upload-artifact@v4" "$workflow"
     [ "$status" -eq 0 ]
-    run grep -F "Verify npm package" "$workflow"
+    run grep -F "bash scripts/ci-quality.sh" "$workflow"
     [ "$status" -eq 0 ]
-    run grep -F 'npm pack --dry-run --json' "$workflow"
+    run grep -F 'bash scripts/ci-tests.sh shard test-results "${{ matrix.shard }}"' "$workflow"
     [ "$status" -eq 0 ]
 }
 

@@ -45,7 +45,7 @@ jobs:
           bash --version
 
       - name: Run PR smoke suite
-        run: bash scripts/run-bats-lane.sh smoke test-results
+        run: bash scripts/ci-tests.sh smoke test-results
 
       - name: Upload smoke timings
         if: always()
@@ -83,7 +83,7 @@ jobs:
           bash --version
 
       - name: Run full-suite shard
-        run: bash scripts/run-bats-lane.sh shard test-results "${{ matrix.shard }}"
+        run: bash scripts/ci-tests.sh shard test-results "${{ matrix.shard }}"
 
       - name: Upload shard timings
         if: always()
@@ -118,15 +118,5 @@ jobs:
           sudo cp /tmp/shellcheck-v0.11.0/shellcheck /usr/local/bin/shellcheck
           shellcheck --version
 
-      - name: Verify npm package
-        run: |
-          node --version
-          npm --version
-          pack_json="$(npm_config_cache="$RUNNER_TEMP/npm-cache" npm pack --dry-run --json)"
-          echo "$pack_json" | jq -r '.[0] | "tarball: \(.filename)\nfiles: \(.entryCount)\nunpacked size: \(.unpackedSize) bytes"'
-
-      - name: Check Node scripts
-        run: node --check scripts/*.mjs
-
-      - name: Run shellcheck
-        run: shellcheck lib/*.sh install.sh update.sh uninstall.sh scripts/*.sh blueprint/.repomethod/scripts/*.sh blueprint/.repomethod/skills/*/scripts/*.sh
+      - name: Run repository quality contract
+        run: bash scripts/ci-quality.sh

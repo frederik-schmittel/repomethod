@@ -22,6 +22,7 @@
 0	tests/workflow_baseline.bats
 1	tests/blueprint_agent_gate.bats
 1	tests/blueprint_ci.bats
+1	tests/ci_local.bats
 1	tests/ci_sharding.bats
 1	tests/blueprint_plan_obligations.bats
 1	tests/blueprint_plan_obligations_hardening.bats

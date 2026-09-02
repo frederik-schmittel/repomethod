@@ -35,7 +35,9 @@
   "scripts": {
     "test": "bats tests/*.bats",
     "test:timed": "bash scripts/run-bats-timed.sh",
-    "pack:check": "npm pack --dry-run --json"
+    "pack:check": "npm pack --dry-run --json",
+    "check": "bash scripts/ci-quality.sh && bash scripts/validate-bats-shards.sh .github/ci/bats-shards.tsv 2",
+    "ci:local": "bash scripts/ci-local.sh"
   },
   "keywords": [
     "coding-agents",

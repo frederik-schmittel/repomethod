@@ -61,7 +61,7 @@ RepoMethod development requires:
 - `bats-core` **v1.13.0** for tests;
 - `shellcheck` **v0.11.0** for shell validation.
 
-CI pins the Bats and ShellCheck versions in [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Use the same versions locally to avoid differences between local verification and CI.
+CI pins the Bats and ShellCheck versions in [`.github/workflows/ci.yml`](.github/workflows/ci.yml). The repository-owned CI scripts verify those versions explicitly so local validation and GitHub Actions cannot silently drift apart.
 
 After cloning the repository, verify that the required tools are available before making changes.
 
@@ -73,7 +73,7 @@ After cloning the repository, verify that the required tools are available befor
 4. Reproduce bugs through the closest practical user path when possible.
 5. Implement only what is required for the intended behavior.
 6. Add or update tests for changed behavior.
-7. Run the repository verification checks.
+7. Run targeted checks while developing, then run the complete local CI gate before push.
 8. Inspect the final diff for accidental or unrelated changes.
 9. Open a focused pull request with the required context and verification results.
 
@@ -123,37 +123,34 @@ RepoMethod supports macOS and Ubuntu. Changes involving shell behavior, Git, fil
 
 ## Verification
 
-Before opening a pull request, run the applicable repository checks.
+Targeted tests are useful during development, but a targeted test passing is not sufficient verification for push or submission.
 
-Run the full Bats suite:
+For fast local feedback, run:
+
+```bash
+npm run check
+```
+
+Before pushing a task branch or opening a pull request, run the complete repository-owned local CI contract:
+
+```bash
+npm run ci:local
+```
+
+That command runs the same repository-owned quality and Bats runner scripts used by GitHub Actions, validates the shard manifest, and checks Git-recorded executable modes. Missing or mismatched pinned tools fail explicitly instead of being skipped.
+
+The underlying checks remain available individually when diagnosing a failure:
 
 ```bash
 npm test
-```
-
-Check the Node scripts:
-
-```bash
 node --check scripts/*.mjs
-```
-
-Verify the npm package:
-
-```bash
 npm run pack:check
-```
-
-Run ShellCheck:
-
-```bash
 shellcheck lib/*.sh install.sh update.sh uninstall.sh scripts/*.sh \
   blueprint/.repomethod/scripts/*.sh \
   blueprint/.repomethod/skills/*/scripts/*.sh
 ```
 
-Targeted tests are useful during development, but a targeted test passing is not sufficient verification for submission.
-
-GitHub Actions is the final cross-platform verification gate.
+GitHub Actions remains the final cross-platform verification gate on Ubuntu and macOS, but it should confirm the same repository-owned commands rather than be the first full regression run.
 
 Do not change CI timeouts, shard assignments, test selection, or verification rules merely to hide a failure. CI changes should address a demonstrated CI problem.
 
