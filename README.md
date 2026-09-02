@@ -175,10 +175,13 @@ RepoMethod is evolving toward a repository-native control layer for the full
 path from engineering intent to a verified pull request, while keeping the
 agent runtime interchangeable.
 
-Near-term work is tracked as concrete GitHub issues:
+Near-term work is tracked as concrete GitHub issues, in roughly the order it
+unblocks the rest:
 
 - **Local CI parity** ([#12](https://github.com/frederik-schmittel/repomethod/issues/12)) — make push-readiness locally reproducible with the same repository-owned checks CI executes.
-- **Plan provenance** ([#5](https://github.com/frederik-schmittel/repomethod/issues/5)) — trace acceptance criteria and integration invariants back to reviewed plan obligations.
+- **Descope ledger** ([#2](https://github.com/frederik-schmittel/repomethod/issues/2)) — record every dropped plan obligation append-only and block delivery until each descope has a reviewed decision.
+- **Contract-shape checks** ([#4](https://github.com/frederik-schmittel/repomethod/issues/4)) — compare the contract shapes a spec declares against the models the implementation actually builds.
+- **Plan provenance** ([#5](https://github.com/frederik-schmittel/repomethod/issues/5)) — trace acceptance criteria and integration invariants back to reviewed plan obligations, and treat reviewed descopes as resolved rather than orphaned.
 - **Plan conformance** ([#6](https://github.com/frederik-schmittel/repomethod/issues/6)) — require an independent full-diff conformance step before Graph completion.
 - **Intent and artifact lineage** ([#14](https://github.com/frederik-schmittel/repomethod/issues/14)) — preserve the upstream purpose of a feature through spec, plan, implementation, and evidence.
 - **Progressive agent context** ([#15](https://github.com/frederik-schmittel/repomethod/issues/15)) — keep the always-loaded agent contract small and retrieve workflow-specific knowledge only when needed.
