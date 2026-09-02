@@ -166,6 +166,8 @@ parse_obligations() {
 
         if [[ ! "$line" =~ $line_re ]]; then
             echo "error: malformed Plan Obligations declaration: $line" >&2
+            # Literal backticks document the required syntax.
+            # shellcheck disable=SC2016
             echo 'expected: - `<anchor>` [shape|behaviour|prohibition|process] <statement>' >&2
             return 1
         fi
