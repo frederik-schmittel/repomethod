@@ -169,6 +169,31 @@ Close out through `.repomethod/scripts/deliver.sh` — `--quick` for Quick MVP,
 and that supervisor verdict to one line, `DELIVERY: done | blocked | incomplete
 — <reason>`; only `done` exits 0.
 
+## Roadmap
+
+RepoMethod is evolving toward a repository-native control layer for the full
+path from engineering intent to a verified pull request, while keeping the
+agent runtime interchangeable.
+
+Near-term work is tracked as concrete GitHub issues:
+
+- **Local CI parity** ([#12](https://github.com/frederik-schmittel/repomethod/issues/12)) — make push-readiness locally reproducible with the same repository-owned checks CI executes.
+- **Plan provenance** ([#5](https://github.com/frederik-schmittel/repomethod/issues/5)) — trace acceptance criteria and integration invariants back to reviewed plan obligations.
+- **Plan conformance** ([#6](https://github.com/frederik-schmittel/repomethod/issues/6)) — require an independent full-diff conformance step before Graph completion.
+- **Intent and artifact lineage** ([#14](https://github.com/frederik-schmittel/repomethod/issues/14)) — preserve the upstream purpose of a feature through spec, plan, implementation, and evidence.
+- **Progressive agent context** ([#15](https://github.com/frederik-schmittel/repomethod/issues/15)) — keep the always-loaded agent contract small and retrieve workflow-specific knowledge only when needed.
+
+Longer-term directions are deliberately recorded here before their interfaces are
+fixed enough for implementation issues:
+
+- **Action-time policy gates** — expose provider-neutral allow/block/needs-human controls that agent hosts can call before sensitive actions are performed.
+- **Agent-method evaluations** — evaluate repository instructions, skills, and workflow behavior against repeatable engineering tasks without making RepoMethod the model runner.
+- **Independent review and workflow observability** — structured review contracts, severity-aware findings, and durable evidence about how autonomous work reached its result.
+
+These directions stay inside RepoMethod's product boundary: repository-owned
+contracts, state, verification, and evidence rather than a hosted agent runtime,
+deployment platform, or monitoring service.
+
 ## Boundaries
 
 RepoMethod owns `.repomethod/` — one directory, nothing host-generic. Its
