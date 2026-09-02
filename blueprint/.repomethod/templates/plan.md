@@ -34,6 +34,7 @@ background work, frontend boundary, and deployment impact.>
 - [ ] Protected paths and dependencies are explicitly authorized.
 - [ ] Tenant/scope/RBAC and integrity requirements are mapped where relevant.
 - [ ] Every acceptance criterion maps to an executable test or evidence item.
+- [ ] Normative plan obligations are declared in the feature spec and the current extraction revision is reviewed before downstream consumption.
 - [ ] Every implementation packet uses `.repomethod/templates/spec-packet.md`, a fresh
       context, and a declared `Maximum tokens` budget that fits its worker.
 - [ ] No implementation packet contains an unresolved architecture, security,

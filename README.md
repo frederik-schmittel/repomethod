@@ -60,9 +60,9 @@ is missing, or the repository's own tests fail, delivery fails — one
   **Graph** — driven by `.repomethod/scripts/feature-workflow.sh`;
 - the repository's own verification command (`.repomethod/verify-command`),
   made mandatory by the completion gate;
-- deterministic gates for scope, forbidden content, acceptance criteria,
-  evidence, protected paths, and that verification command, closed out with
-  one command;
+- deterministic gates for scope, forbidden content, reviewed plan obligations,
+  acceptance criteria, evidence, protected paths, and that verification
+  command, closed out with one command;
 - persistent workflow state a second host can resume from a clean checkout;
 - a manifest-aware install / update / uninstall lifecycle that preserves
   managed files you have edited.
@@ -74,7 +74,7 @@ coding agent
     ↓  AGENTS.md / CLAUDE.md pointer block
 .repomethod/AGENTS.md            the contract every agent reads
     ↓  workflow state + spec
-real shell verification          scope · prohibitions · acceptance · evidence · verify-command
+real shell verification          scope · prohibitions · plan obligations · acceptance · evidence · verify-command
     ↓
 deterministic delivery verdict   done | blocked | incomplete
 ```
@@ -119,6 +119,9 @@ structural gates and trusts only their exit status:
   inside the spec's Scope and off protected paths;
 - `verify-forbidden.sh` — an optional `## Must Not Exist` section rejects
   forbidden content in files whose paths match the spec's Scope;
+- `plan-obligations.sh check` — if the spec declares `## Plan Obligations`
+  entries, the current feature-scoped extraction must exist, match the spec and
+  workflow mode when state is supplied, and be approved;
 - `verify-acceptance.sh` and `verify-evidence.sh` — every criterion is checked
   and every referenced evidence file exists and is non-empty;
 - `verify-report.sh` and `verify-invariants.sh` — enforced only when the spec
@@ -139,6 +142,22 @@ The check scans tracked and non-ignored untracked regular files inside `Scope`,
 including pre-existing code. It scans file contents verbatim, so comments and
 docstrings count as matches. Unknown file types are scanned as well; scoped
 symlinks and other non-regular Git entries fail closed.
+
+Plan obligations are opt-in. Existing Classic/Graph specs with no active
+declarations are unaffected, including specs that use a non-canonical path or
+filename. When an existing feature is adding the first declaration under
+`## Plan Obligations`, generate and review the extraction before the full gate:
+
+```bash
+.repomethod/scripts/plan-obligations.sh extract --mode <classic|graph> \
+  --spec specs/<feature>.md --repo .
+.repomethod/scripts/plan-obligations.sh approve --mode <classic|graph> \
+  --spec specs/<feature>.md --repo . --revision <n> \
+  --approval-text "<review evidence>"
+```
+
+Until that current revision is approved, `agent-gate.sh --spec` fails by
+design. This is the migration step for features that opt into plan obligations.
 
 `.repomethod/scripts/supervisor.sh check` turns a persisted workflow into a
 deterministic verdict — `done`, `continue`, `blocked`, `needs_human`, or

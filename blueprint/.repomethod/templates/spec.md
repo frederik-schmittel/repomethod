@@ -28,6 +28,24 @@ only present or transport? Relevant states and transitions.>
 <Existing interfaces, upstream tasks, and the exact interfaces produced for
 downstream work packets.>
 
+## Plan Obligations
+
+<!-- Optional for Classic. In Graph, declare every normative statement that
+must survive planning as one explicit, stable anchor before execution approval.
+Use exactly one of: shape, behaviour, prohibition, process.
+
+- `response-shape` [shape] Response contains id, status, and result.
+- `retry-order` [behaviour] Failed work is retried before completion.
+- `no-eval` [prohibition] Plan content is never executed through eval.
+- `approval-first` [process] Implementation starts only after plan approval.
+
+Anchors use lowercase letters, digits, dot, underscore, or hyphen and remain
+stable when wording changes. RepoMethod derives IDs as `obl.<anchor>`.
+After changing this section, rerun `plan-obligations.sh extract` and obtain
+approval for the displayed extraction revision before downstream checks consume
+it. Quick MVP has no spec and therefore no plan obligations.
+-->
+
 ## Scope
 
 <Allowed files/directories as glob patterns, one per line, e.g.:>

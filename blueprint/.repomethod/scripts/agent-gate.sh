@@ -3,10 +3,10 @@
 # agent-gate.sh --quick [--base <b>] [--report <r>]
 #
 # Full gate (classic/graph): runs verify, verify-scope, verify-forbidden,
-# verify-acceptance, verify-evidence, verify-report, and verify-invariants in
-# order and trusts only their exit status. Every argument comes from a flag —
-# nothing is read from the environment. --spec has no default and fails closed
-# if omitted.
+# plan-obligations, verify-acceptance, verify-evidence, verify-report, and
+# verify-invariants in order and trusts only their exit status. Every argument
+# comes from a flag — nothing is read from the environment. --spec has no
+# default and fails closed if omitted.
 #
 # Quick gate (quick-mvp close-out): runs verify, checks that no protected
 # zone was touched, and checks that the evidence report exists and is not
@@ -99,9 +99,26 @@ elif [ -n "$STATE" ]; then
     scope_base_args=(--state "$STATE")
 fi
 
+# Plan-obligations mode binding: when a workflow state is supplied, pin the
+# obligations check to that state's delivery mode so an artifact recorded for
+# the other mode is rejected. Legacy/minimal states without a mode stay
+# mode-neutral (the check then accepts either classic or graph).
+obligation_mode_args=()
+if [ -n "$STATE" ]; then
+    [ -f "$STATE" ] || { echo "error: workflow state not found: $STATE" >&2; exit 1; }
+    workflow_mode="$(jq -r '.mode? // empty' "$STATE" 2>/dev/null)" \
+        || { echo "error: cannot read workflow mode from state: $STATE" >&2; exit 1; }
+    case "$workflow_mode" in
+        classic|graph) obligation_mode_args=(--mode "$workflow_mode") ;;
+        '') ;;
+        *) echo "error: workflow state has unsupported mode: $workflow_mode" >&2; exit 1 ;;
+    esac
+fi
+
 "${here}/verify.sh" --warn-frontend-uncovered .
 "${here}/verify-scope.sh" --spec "$SPEC" "${scope_base_args[@]}" --repo .
 "${here}/verify-forbidden.sh" --spec "$SPEC" --repo .
+"${here}/plan-obligations.sh" check "${obligation_mode_args[@]}" --spec "$SPEC" --repo .
 "${here}/verify-acceptance.sh" --spec "$SPEC" --report "$REPORT"
 "${here}/verify-evidence.sh" --spec "$SPEC"
 "${here}/verify-report.sh" --spec "$SPEC" --report "$REPORT"
