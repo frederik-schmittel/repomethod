@@ -25,6 +25,8 @@ resolve_base() {
     local dir="${1:-.}" mb ref up cur
     up="$(git -C "$dir" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
     cur="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    # <remote>/<same-branch> is this branch's own pushed copy, not a fork
+    # point — skip it and fall through to origin/HEAD, then main.
     if [ -n "$up" ] && [ "${up#*/}" != "$cur" ]; then
         if mb="$(git -C "$dir" merge-base HEAD "$up" 2>/dev/null)" && [ -n "$mb" ]; then
             printf '%s\n' "$mb"
@@ -56,15 +58,23 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
+# --state carries the workflow's pinned config.base_ref (read by verify-scope).
+# It only makes sense for the full, spec-driven gate.
 if [ "$QUICK" = true ] && [ -n "$STATE" ]; then
     echo "--state is only valid with --spec" >&2
     exit 1
 fi
+
+# --spec has no default and fails closed if omitted. Checked before the preflight
+# so a missing spec is still the first thing reported.
 if [ "$QUICK" != true ] && [ -z "$SPEC" ]; then
     echo "error: --spec is required" >&2
     exit 1
 fi
 
+# Environment preflight: after argument validation, before any base resolution
+# or verify.sh, for both the quick and the spec gate. A hard finding aborts here
+# with preflight's own exit status.
 "${here}/preflight.sh" --quiet || exit $?
 
 if [ "$QUICK" = true ]; then
@@ -79,6 +89,9 @@ if [ "$QUICK" = true ]; then
     exit 0
 fi
 
+# Base authority is verify-scope's. An explicit --base wins and keeps its
+# diagnostics; otherwise forward --state so verify-scope reads config.base_ref;
+# with neither, verify-scope falls back to its own resolve_base.
 scope_base_args=()
 if [ -n "$BASE" ]; then
     scope_base_args=(--base "$BASE")
@@ -86,6 +99,10 @@ elif [ -n "$STATE" ]; then
     scope_base_args=(--state "$STATE")
 fi
 
+# Plan-obligations mode binding: when a workflow state is supplied, pin the
+# obligations check to that state's delivery mode so an artifact recorded for
+# the other mode is rejected. Legacy/minimal states without a mode stay
+# mode-neutral (the check then accepts either classic or graph).
 obligation_mode_args=()
 if [ -n "$STATE" ]; then
     [ -f "$STATE" ] || { echo "error: workflow state not found: $STATE" >&2; exit 1; }
@@ -93,7 +110,7 @@ if [ -n "$STATE" ]; then
         || { echo "error: cannot read workflow mode from state: $STATE" >&2; exit 1; }
     case "$workflow_mode" in
         classic|graph) obligation_mode_args=(--mode "$workflow_mode") ;;
-        '') ;; # Legacy/minimal states remain mode-neutral; verify-scope may still use config.base_ref.
+        '') ;;
         *) echo "error: workflow state has unsupported mode: $workflow_mode" >&2; exit 1 ;;
     esac
 fi

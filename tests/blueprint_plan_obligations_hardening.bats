@@ -45,6 +45,11 @@ EOF
     run "$SCRIPT" check --spec "${WORK}/custom/My-Feature.md" --repo "$WORK"
     [ "$status" -eq 1 ]
     [[ "$output" == *"expected exactly: ## Plan Obligations"* ]]
+
+    printf '# Task\n\n## Plan  Obligations\n' > "${WORK}/custom/My-Feature.md"
+    run "$SCRIPT" check --spec "${WORK}/custom/My-Feature.md" --repo "$WORK"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"expected exactly: ## Plan Obligations"* ]]
 }
 
 @test "spec path and slug conventions apply only after plan obligations are active" {

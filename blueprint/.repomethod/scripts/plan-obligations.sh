@@ -87,7 +87,9 @@ esac
 # Detect only headings that actually try to be "Plan Obligations". This avoids
 # false positives such as "Deployment Plan and Rollout Obligations" while still
 # failing closed on wrong heading levels, casing, a trailing colon, a simple
-# qualifier, or the common one-character spelling slip "Obligatons".
+# qualifier, extra internal spacing, or the common one-character spelling slip
+# "Obligatons". Any deviation from the exact "## Plan Obligations" heading is
+# rejected rather than silently treated as N/A.
 while IFS= read -r heading; do
     heading_canonical="$heading"
     while [[ "$heading_canonical" == *[[:space:]] ]]; do
@@ -99,9 +101,9 @@ while IFS= read -r heading; do
     }
 done < <(
     grep -iE \
-        -e '^#{1,6}[[:space:]]+plan obligations[[:space:]:]*$' \
-        -e '^#{1,6}[[:space:]]+plan obligations[[:space:]]+\([^)]*\)[[:space:]]*$' \
-        -e '^#{1,6}[[:space:]]+plan obligatons[[:space:]:]*$' \
+        -e '^#{1,6}[[:space:]]+plan[[:space:]]+obligations[[:space:]:]*$' \
+        -e '^#{1,6}[[:space:]]+plan[[:space:]]+obligations[[:space:]]+\([^)]*\)[[:space:]]*$' \
+        -e '^#{1,6}[[:space:]]+plan[[:space:]]+obligatons[[:space:]:]*$' \
         "$spec_abs" || true
 )
 

@@ -23,7 +23,7 @@ Manage repository skills only through `.repomethod/scripts/manage-skills.sh`.
 .repomethod/scripts/verify.sh .            # runs .repomethod/verify-command
 .repomethod/scripts/verify-scope.sh --spec <spec> --repo .
 .repomethod/scripts/verify-forbidden.sh --spec <spec> --repo .
-.repomethod/scripts/plan-obligations.sh check --mode <classic|graph> --spec <spec> --repo .
+.repomethod/scripts/plan-obligations.sh check [--mode <classic|graph>] --spec <spec> --repo .   # --mode optional; agent-gate binds it from --state
 .repomethod/scripts/verify-acceptance.sh --spec <spec> --report .repomethod/evidence/report.md
 .repomethod/scripts/verify-evidence.sh --spec <spec>
 .repomethod/scripts/verify-report.sh --spec <spec> --report .repomethod/evidence/report.md
