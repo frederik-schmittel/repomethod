@@ -53,11 +53,11 @@ the event log independently.
 - `blueprint/.repomethod/scripts/descope-ledger.sh`
 - `blueprint/.repomethod/scripts/feature-workflow.sh`
 - `blueprint/.repomethod/scripts/workflow-graph.sh`
-- `blueprint/.repomethod/scripts/workflow-graph-core.sh`
 - `blueprint/.repomethod/scripts/deliver.sh`
 - `blueprint/.repomethod/docs/WORKFLOW_GRAPH.md`
 - `blueprint/.repomethod/templates/spec-packet.md`
 - `tests/blueprint_descope_ledger.bats`
+- `tests/blueprint_deliver.bats`
 - `.github/ci/bats-shards.tsv`
 - `specs/descope-ledger.md`
 
@@ -84,7 +84,7 @@ the event log independently.
 | Criterion | Test/Evidence | Work Packet |
 | --- | --- | --- |
 | 1-5 | `tests/blueprint_descope_ledger.bats` | ledger |
-| 6 | `tests/blueprint_descope_ledger.bats` | delivery |
+| 6 | `tests/blueprint_descope_ledger.bats`, `tests/blueprint_deliver.bats` | delivery |
 | 7 | `tests/blueprint_descope_ledger.bats` | handoff |
 | 8 | `tests/blueprint_descope_ledger.bats` | docs |
 
