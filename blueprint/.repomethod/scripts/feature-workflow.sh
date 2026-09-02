@@ -80,7 +80,7 @@ normalize_gate_command() {
 case "$mode" in
     quick-mvp)
         assert_baseline_green false
-        cat <<'EOF'
+        cat <<'EOF_QUICK'
 quick-mvp workflow selected (no workflow state is created)
 1. Quick Plan: record Goal, Scope, Test in at most three bullets.
 2. Implement the smallest testable change in the current agent session using existing skills.
@@ -93,20 +93,24 @@ quick-mvp workflow selected (no workflow state is created)
 Plan obligations are not applicable in this stateless path.
 No research, graph state, subagents, packetization, or spec in this path.
 Stop before changes involving protected paths, architecture, or security decisions.
-EOF
+EOF_QUICK
         ;;
     classic)
         shift
         if [ "$#" -eq 0 ]; then
-            cat <<'EOF'
+            cat <<'EOF_CLASSIC'
 classic workflow selected
 Create a bounded implementation state with:
 .repomethod/scripts/feature-workflow.sh classic init --feature <slug> --verify-command ".repomethod/scripts/agent-gate.sh --spec specs/<slug>.md"
 Classic runs Implementation -> configured verification command -> Completion.
+Initialization also creates the feature-scoped append-only descope ledger.
+Record an intentionally omitted plan obligation with descope-ledger.sh add and
+append an accepted/rejected review with descope-ledger.sh review. Delivery is
+blocked while any current descope is unreviewed or rejected.
 Verification failures create a bounded Fix -> Verification loop.
 If the feature spec declares ## Plan Obligations, run plan-obligations.sh extract
 and approve the current extraction revision before any downstream check consumes it.
-EOF
+EOF_CLASSIC
             exit 0
         fi
         if [ "${1:-}" = "init" ]; then
@@ -121,14 +125,17 @@ EOF
     graph)
         shift
         if [ "$#" -eq 0 ]; then
-            cat <<'EOF'
+            cat <<'EOF_GRAPH'
 graph workflow selected
 Research -> Plan -> obligation extraction/review -> execution graph approval -> Implementation -> Verification -> Completion.
+Initialization also creates the feature-scoped append-only descope ledger.
+Any intentionally omitted obl.<anchor> must be recorded with descope-ledger.sh;
+unreviewed or rejected descopes block delivery and accepted descopes remain in handoff provenance.
 Declare normative statements in specs/<feature>.md under ## Plan Obligations.
 Run plan-obligations.sh extract after planning and approve that exact extraction
 revision before downstream checks consume it. Editing the section creates a new
 pending revision. Then preview and approve the execution graph as usual.
-EOF
+EOF_GRAPH
             exit 0
         fi
         if [ "${1:-}" = "init" ]; then

@@ -45,6 +45,22 @@ Set this to fit the worker's model and context with headroom. Reduce it for
 routine work; never raise it once the packet is dispatched. This budget does
 not constrain the comprehensive planning pass that produced the approved plan.
 
+## Descopes
+
+If this packet intentionally omits an approved `obl.<anchor>` plan obligation,
+record it in the workflow's feature-scoped descope ledger before handoff:
+
+```bash
+.repomethod/scripts/descope-ledger.sh add --state <state> \
+  --id descope.<anchor> --plan-ref obl.<anchor> \
+  --description "<what is omitted>" --rationale "<why>" --owner "<owner>"
+```
+
+Review decisions are append-only. Record the review with
+`descope-ledger.sh review --status accepted|rejected`; never edit or delete an
+earlier ledger event. `unreviewed` and `rejected` descopes block delivery.
+Accepted descopes stay visible in handoff provenance.
+
 ## Stop Conditions
 
 - An unresolved product, architecture, security, or authority decision appears.
@@ -61,4 +77,5 @@ If the packet stops or finishes, write a compact durable handoff containing:
 - tests run with exact outcomes
 - remaining work and current failing test
 - deviations or conflicts with the approved plan
+- open descope IDs and accepted descope provenance from the canonical descope state
 - only the files/interfaces the next fresh worker must read

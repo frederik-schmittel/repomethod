@@ -134,6 +134,38 @@ Execute returned nodes with `start` and `complete`. Run Verification nodes with
 When a host cannot create parallel workers, follow
 `config.sequential_fallback`; `block` means stop instead of serializing.
 
+## Descopes
+
+Every Classic or Graph workflow initializes two feature-scoped files beside its
+state:
+
+```text
+.repomethod/workflows/<feature>.descopes.jsonl
+.repomethod/workflows/<feature>.descopes.checkpoint.json
+```
+
+The JSONL file is an append-only event log. A created descope carries a stable
+`descope.<anchor>` ID, its stable `obl.<anchor>` plan reference, description,
+rationale, owner, and initial `unreviewed` status. Review decisions append a new
+event; earlier events are never rewritten:
+
+```bash
+.repomethod/scripts/descope-ledger.sh add --state "$STATE" \
+  --id descope.api --plan-ref obl.api \
+  --description "omit API packet" --rationale "deferred by reviewer" --owner "team"
+
+.repomethod/scripts/descope-ledger.sh review --state "$STATE" \
+  --id descope.api --status accepted \
+  --rationale "approved for this delivery" --owner "reviewer"
+```
+
+Each event is hash-chained. The deterministic checkpoint records the expected
+event count and tail hash, so edited events and ledger truncation fail closed.
+`descope-ledger.sh state --state "$STATE"` is the canonical machine-readable
+current-state derivation used by handoff and delivery. `unreviewed` and
+`rejected` IDs appear in `blocking_ids` and prevent `DELIVERY: done`; accepted
+descopes remain in the derived state and handoff for provenance.
+
 ## State and portability
 
 State lives under `.repomethod/workflows/`. Outputs and command logs live

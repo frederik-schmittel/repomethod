@@ -5,9 +5,9 @@
 #   deliver.sh --spec <spec>                 classic/graph spec gate
 #   deliver.sh --spec <spec> --state <file>  stateful classic/graph close-out
 #
-# A pure facade. It computes no gate, scope, evidence or workflow state of its
-# own: it invokes agent-gate.sh (and, for a stateful spec, supervisor.sh),
-# captures their combined stdout+stderr, and prints exactly one line
+# A pure facade. It computes no gate, scope, evidence, workflow, or descope
+# state of its own: it invokes the authoritative building blocks and prints
+# exactly one line
 #   DELIVERY: done|blocked|incomplete — <reason>
 # to stdout. It never writes stderr and never forwards a sub-command's output.
 # Only `done` exits 0.
@@ -68,18 +68,23 @@ last_nonempty() {
     printf '%s\n' "$1" | awk '{ p = $0; gsub(/\r/, "", p) } p ~ /[^[:space:]]/ { l = $0 } END { printf "%s", l }'
 }
 
-blocked_from_gate() {
-    local line
+blocked_from_cap() {
+    local fallback="$1" line
     line="$(last_nonempty "$cap")"
     if [ -z "$line" ]; then
-        printf 'DELIVERY: blocked — agent-gate exited %s\n' "$rc"
+        printf 'DELIVERY: blocked — %s\n' "$fallback"
     else
         printf 'DELIVERY: blocked — %s\n' "$(oneline "$line")"
     fi
     exit 1
 }
 
+blocked_from_gate() {
+    blocked_from_cap "agent-gate exited $rc"
+}
+
 invalid_supervisor() { printf 'DELIVERY: blocked — invalid supervisor result\n'; exit 1; }
+invalid_descope_state() { printf 'DELIVERY: blocked — invalid descope state\n'; exit 1; }
 
 # --- quick -------------------------------------------------------------
 
@@ -103,6 +108,28 @@ fi
 
 run_block "${here}/agent-gate.sh" --spec "$spec" --state "$state"
 [ "$rc" -eq 0 ] || blocked_from_gate
+
+# Descope authority is the feature-scoped ledger. delivery does not parse its
+# event log; it consumes the canonical current-state derivation only.
+run_block "${here}/descope-ledger.sh" state --state "$state"
+[ "$rc" -eq 0 ] || blocked_from_cap "descope ledger validation failed"
+
+descope_meta="$(printf '%s' "$cap" | jq -e -s '
+    if length == 1 and (.[0] | type) == "object"
+       and .[0].schema_version == 1
+       and (.[0].descopes | type) == "array"
+       and (.[0].blocking_ids | type) == "array"
+    then .[0] else empty end' 2>/dev/null)" || invalid_descope_state
+
+blocking_descopes="$(printf '%s' "$descope_meta" | jq -r '
+    .blocking_ids as $blocking
+    | [.descopes[] | select(.id as $id | $blocking | index($id)) | "\(.id) (\(.status))"]
+    | join(", ")
+')"
+if [ "$(printf '%s' "$descope_meta" | jq '.blocking_ids | length')" -gt 0 ]; then
+    printf 'DELIVERY: blocked — descopes require acceptance: %s\n' "$blocking_descopes"
+    exit 1
+fi
 
 run_block "${here}/supervisor.sh" check --state "$state"
 sup_rc="$rc"
