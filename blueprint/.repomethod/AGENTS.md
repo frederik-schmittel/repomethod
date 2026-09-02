@@ -239,6 +239,7 @@ Stop and report the concrete blocker when work needs:
 - Reproduce bugs through the closest practical user path before fixing them.
 - Add or update tests for behavior changes.
 - Never commit secrets or edit generated files by hand.
+- Run the repository-defined complete local CI or pre-push gate before pushing when one is configured; targeted tests alone do not establish push-readiness.
 - Run `.repomethod/scripts/deliver.sh --spec <spec> --state <file>` (or `--quick` for quick-mvp) before declaring delivery complete; only `DELIVERY: done` counts.
 - On an active `classic`/`graph` workflow, write a `workflow-graph.sh handoff` before ending the turn — current node, changed files, next step, and any blocker or completion claim.
 - Record changed files, verification evidence, deviations, and remaining risks.

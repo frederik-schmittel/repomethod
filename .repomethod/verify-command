@@ -1,1 +1,1 @@
-bats tests/*.bats
+npm run ci:local
