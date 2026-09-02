@@ -3,10 +3,10 @@
 # agent-gate.sh --quick [--base <b>] [--report <r>]
 #
 # Full gate (classic/graph): runs verify, verify-scope, verify-forbidden,
-# plan-obligations, verify-contracts, verify-acceptance, verify-evidence, verify-report, and
-# verify-invariants in order and trusts only their exit status. Every argument
-# comes from a flag — nothing is read from the environment. --spec has no
-# default and fails closed if omitted.
+# plan-obligations, verify-provenance, verify-contracts, verify-acceptance,
+# verify-evidence, verify-report, and verify-invariants in order and trusts only
+# their exit status. Every argument comes from a flag — nothing is read from the
+# environment. --spec has no default and fails closed if omitted.
 #
 # Quick gate (quick-mvp close-out): runs verify, checks that no protected
 # zone was touched, and checks that the evidence report exists and is not
@@ -115,10 +115,16 @@ if [ -n "$STATE" ]; then
     esac
 fi
 
+provenance_state_args=()
+if [ -n "$STATE" ]; then
+    provenance_state_args=(--state "$STATE")
+fi
+
 "${here}/verify.sh" --warn-frontend-uncovered .
 "${here}/verify-scope.sh" --spec "$SPEC" "${scope_base_args[@]}" --repo .
 "${here}/verify-forbidden.sh" --spec "$SPEC" --repo .
 "${here}/plan-obligations.sh" check "${obligation_mode_args[@]}" --spec "$SPEC" --repo .
+"${here}/verify-provenance.sh" --spec "$SPEC" "${provenance_state_args[@]}" --repo .
 "${here}/verify-contracts.sh" --spec "$SPEC"
 "${here}/verify-acceptance.sh" --spec "$SPEC" --report "$REPORT"
 "${here}/verify-evidence.sh" --spec "$SPEC"

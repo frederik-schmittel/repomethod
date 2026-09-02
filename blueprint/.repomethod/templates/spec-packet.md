@@ -35,6 +35,16 @@ Scope permits it.
 - `<exact narrow RED command and expected failure>`
 - `<exact GREEN command and expected pass>`
 
+## Acceptance Mapping
+
+Use the main feature's criterion number where applicable. `Plan Ref` accepts
+one or more exact backticked `obl.<anchor>` IDs separated by commas. These
+references are aggregated with the feature spec by `verify-provenance.sh`.
+
+| Criterion | Test/Evidence | Plan Ref |
+| --- | --- | --- |
+| `<criterion>` | `<exact test or evidence>` | `obl.<anchor>` |
+
 ## Execution Budget
 
 - Context: fresh
