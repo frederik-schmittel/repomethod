@@ -5,8 +5,17 @@ setup() {
     LEDGER="${SRC}/descope-ledger.sh"
     GRAPH="${SRC}/workflow-graph.sh"
     WORK="$(mktemp -d)"
+    git -C "$WORK" init -q -b main
+    git -C "$WORK" config user.email t@e.x
+    git -C "$WORK" config user.name T
+    printf 'seed\n' > "$WORK/seed"
+    git -C "$WORK" add seed
+    git -C "$WORK" commit -q -m seed
+    mkdir -p "$WORK/.repomethod/workflows"
     STATE="${WORK}/demo.json"
-    printf '{"feature":"demo"}\n' > "$STATE"
+    printf '{"feature":"demo","repo_root":"%s"}\n' "$WORK" > "$STATE"
+    LEDGER_FILE="$WORK/.repomethod/workflows/demo.descopes.jsonl"
+    CHECKPOINT_FILE="$WORK/.repomethod/workflows/demo.descopes.checkpoint.json"
 }
 
 teardown() { rm -rf -- "$WORK"; }
@@ -18,8 +27,8 @@ add_descope() {
 
 @test "ledger is feature scoped and derives multiple descopes" {
     init_ledger
-    [ -f "$WORK/demo.descopes.jsonl" ]
-    [ -f "$WORK/demo.descopes.checkpoint.json" ]
+    [ -f "$LEDGER_FILE" ]
+    [ -f "$CHECKPOINT_FILE" ]
     [ ! -e "$REPO_ROOT/blueprint/.repomethod/descoped.md" ]
     add_descope descope.zeta obl.zeta
     add_descope descope.alpha obl.alpha
@@ -29,7 +38,7 @@ add_descope() {
     [ "$(jq -r '.blocking_ids | join(",")' <<< "$output")" = "descope.alpha,descope.zeta" ]
 }
 
-@test "required fields and stable identities fail closed" {
+@test "required fields stable identities and duplicate ids fail closed" {
     init_ledger
     run "$LEDGER" add --state "$STATE" --id bad --plan-ref obl.api --description omit --rationale later --owner dev
     [ "$status" -ne 0 ]
@@ -37,14 +46,17 @@ add_descope() {
     [ "$status" -ne 0 ]
     run "$LEDGER" add --state "$STATE" --id descope.api --plan-ref obl.api --description omit --rationale later
     [ "$status" -ne 0 ]
+    add_descope descope.api obl.api
+    run "$LEDGER" add --state "$STATE" --id descope.api --plan-ref obl.api --description again --rationale later --owner dev
+    [ "$status" -ne 0 ]; [[ "$output" == *"already exists"* ]]
 }
 
 @test "reviews append and latest status governs delivery state" {
     init_ledger; add_descope descope.api obl.api
-    first="$(sed -n '1p' "$WORK/demo.descopes.jsonl")"
+    first="$(sed -n '1p' "$LEDGER_FILE")"
     "$LEDGER" review --state "$STATE" --id descope.api --status accepted --rationale approved --owner reviewer >/dev/null
-    [ "$(sed -n '1p' "$WORK/demo.descopes.jsonl")" = "$first" ]
-    [ "$(wc -l < "$WORK/demo.descopes.jsonl" | tr -d ' ')" = 2 ]
+    [ "$(sed -n '1p' "$LEDGER_FILE")" = "$first" ]
+    [ "$(wc -l < "$LEDGER_FILE" | tr -d ' ')" = 2 ]
     run "$LEDGER" state --state "$STATE"
     [ "$(jq -r '.accepted_ids[0]' <<< "$output")" = descope.api ]
     "$LEDGER" review --state "$STATE" --id descope.api --status rejected --rationale reconsidered --owner reviewer >/dev/null
@@ -52,16 +64,19 @@ add_descope() {
     [ "$(jq -r '.blocking_ids[0]' <<< "$output")" = descope.api ]
 }
 
-@test "tampering and truncation are detected" {
+@test "tampering truncation and malformed events are detected" {
     init_ledger; add_descope descope.api obl.api
     "$LEDGER" review --state "$STATE" --id descope.api --status accepted --rationale approved --owner reviewer >/dev/null
-    cp "$WORK/demo.descopes.jsonl" "$WORK/saved"
-    { jq -cS '.description="tampered"' < <(sed -n '1p' "$WORK/saved"); sed -n '2p' "$WORK/saved"; } > "$WORK/demo.descopes.jsonl"
+    cp "$LEDGER_FILE" "$WORK/saved"
+    { jq -cS '.description="tampered"' < <(sed -n '1p' "$WORK/saved"); sed -n '2p' "$WORK/saved"; } > "$LEDGER_FILE"
     run "$LEDGER" state --state "$STATE"
     [ "$status" -ne 0 ]; [[ "$output" == *"hash mismatch"* ]]
-    head -n 1 "$WORK/saved" > "$WORK/demo.descopes.jsonl"
+    head -n 1 "$WORK/saved" > "$LEDGER_FILE"
     run "$LEDGER" state --state "$STATE"
     [ "$status" -ne 0 ]; [[ "$output" == *"event count does not match"* ]]
+    printf '{bad json}\n' > "$LEDGER_FILE"
+    run "$LEDGER" state --state "$STATE"
+    [ "$status" -ne 0 ]; [[ "$output" == *"invalid JSON event"* ]]
 }
 
 @test "workflow init and handoff use canonical descope state" {
@@ -79,12 +94,14 @@ add_descope() {
     [ "$(jq -r '.descopes[] | select(.id=="descope.accepted") | .status' "$handoff")" = accepted ]
 }
 
-@test "stateful delivery blocks until accepted and fails on tamper" {
+@test "stateful delivery blocks unreviewed and rejected descopes and fails on tamper" {
     bin="$WORK/bin"; mkdir -p "$bin"; cp "$SRC/deliver.sh" "$SRC/descope-ledger.sh" "$bin/"
     printf '#!/usr/bin/env bash\nexit 0\n' > "$bin/agent-gate.sh"
     printf '#!/usr/bin/env bash\nprintf '\''{"verdict":"done","reason":"workflow complete"}\\n'\''\n' > "$bin/supervisor.sh"
     chmod +x "$bin/"*.sh
-    dstate="$WORK/delivery.json"; printf '{"feature":"delivery"}\n' > "$dstate"
+    droot="$WORK/delivery-repo"; mkdir -p "$droot/.repomethod/workflows"; git -C "$droot" init -q -b main
+    dstate="$droot/delivery.json"; printf '{"feature":"delivery","repo_root":"%s"}\n' "$droot" > "$dstate"
+    dledger="$droot/.repomethod/workflows/delivery.descopes.jsonl"
     "$bin/descope-ledger.sh" init --state "$dstate" >/dev/null
     "$bin/descope-ledger.sh" add --state "$dstate" --id descope.api --plan-ref obl.api --description omit --rationale bounded --owner dev >/dev/null
     run "$bin/deliver.sh" --spec specs/x.md --state "$dstate"
@@ -92,7 +109,10 @@ add_descope() {
     "$bin/descope-ledger.sh" review --state "$dstate" --id descope.api --status accepted --rationale approved --owner reviewer >/dev/null
     run "$bin/deliver.sh" --spec specs/x.md --state "$dstate"
     [ "$status" -eq 0 ]; [ "$output" = "DELIVERY: done — workflow complete" ]
-    sed -i 's/bounded/tampered/' "$WORK/delivery.descopes.jsonl"
+    "$bin/descope-ledger.sh" review --state "$dstate" --id descope.api --status rejected --rationale reopened --owner reviewer >/dev/null
+    run "$bin/deliver.sh" --spec specs/x.md --state "$dstate"
+    [ "$status" -eq 1 ]; [[ "$output" == *"descope.api (rejected)"* ]]
+    sed 's/bounded/tampered/' "$dledger" > "$dledger.tmp" && mv "$dledger.tmp" "$dledger"
     run "$bin/deliver.sh" --spec specs/x.md --state "$dstate"
     [ "$status" -eq 1 ]; [[ "$output" == *"hash mismatch"* ]]
 }
