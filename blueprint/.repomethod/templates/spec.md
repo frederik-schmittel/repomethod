@@ -39,6 +39,17 @@ downstream work packets.>
 
 <Explicitly excluded areas.>
 
+## Must Not Exist
+
+<!-- Optional. Add one declaration per line, for example:
+- `legacy_api(`
+- regex: `legacy_[0-9]+\(`
+Backticked declarations are fixed strings. The explicit `regex:` prefix opts
+into POSIX extended regular expressions. Search is limited to paths declared
+in Scope. Comments and docstrings count as file content; unknown file types
+are scanned rather than silently skipped.
+-->
+
 ## Acceptance Criteria
 
 <An unambiguous, ideally machine-checkable list, e.g.:>

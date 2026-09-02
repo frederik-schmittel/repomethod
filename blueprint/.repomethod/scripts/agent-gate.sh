@@ -2,10 +2,11 @@
 # agent-gate.sh --spec <required> [--base <b>] [--state <f>] [--report <r>]
 # agent-gate.sh --quick [--base <b>] [--report <r>]
 #
-# Full gate (classic/graph): runs verify, verify-scope, verify-acceptance,
-# verify-evidence, verify-report, and verify-invariants in order and trusts
-# only their exit status. Every argument comes from a flag — nothing is read
-# from the environment. --spec has no default and fails closed if omitted.
+# Full gate (classic/graph): runs verify, verify-scope, verify-forbidden,
+# verify-acceptance, verify-evidence, verify-report, and verify-invariants in
+# order and trusts only their exit status. Every argument comes from a flag —
+# nothing is read from the environment. --spec has no default and fails closed
+# if omitted.
 #
 # Quick gate (quick-mvp close-out): runs verify, checks that no protected
 # zone was touched, and checks that the evidence report exists and is not
@@ -100,6 +101,7 @@ fi
 
 "${here}/verify.sh" --warn-frontend-uncovered .
 "${here}/verify-scope.sh" --spec "$SPEC" "${scope_base_args[@]}" --repo .
+"${here}/verify-forbidden.sh" --spec "$SPEC" --repo .
 "${here}/verify-acceptance.sh" --spec "$SPEC" --report "$REPORT"
 "${here}/verify-evidence.sh" --spec "$SPEC"
 "${here}/verify-report.sh" --spec "$SPEC" --report "$REPORT"
