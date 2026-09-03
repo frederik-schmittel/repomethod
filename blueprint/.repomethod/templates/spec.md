@@ -18,6 +18,24 @@ existing systems are affected, relevant earlier decisions.>
 - Acceptance criteria are mapped to tests or concrete evidence.
 - Open architecture, security, or product decisions are resolved.
 
+## Source Intent
+
+<!-- Optional for Classic and Graph; Quick MVP has no spec and no intent-file
+requirement. Keep stable upstream purpose in `intents/<feature>.md`, created from
+`.repomethod/templates/intent.md`. Technical implementation detail stays in this
+feature spec.
+
+Generate the only supported machine-checkable binding with:
+
+.repomethod/scripts/intent-lineage.sh pin --intent intents/<feature>.md --repo .
+
+Paste exactly the single canonical JSON object it prints inside one fenced
+`json` block in this section. The binding contains only `schema_version`,
+`path`, and the SHA-256 identity of the exact intent bytes. Do not calculate or
+rewrite this identity independently. An untouched comment-only section is
+backward-compatible and means this spec has not opted into intent lineage.
+-->
+
 ## Architecture and Authority Boundaries
 
 <Which component decides and persists authoritatively? Which components may
