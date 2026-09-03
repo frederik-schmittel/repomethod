@@ -74,6 +74,19 @@ The pull-request flow uses one changed top-level spec under `specs/` and
 pull request changes no spec and closes out with
 `.repomethod/scripts/deliver.sh --quick` instead.
 
+Classic and Graph delivery has two more stateful blockers, both fail-closed and
+both off the Quick MVP path. Every intentionally dropped plan obligation goes in
+the feature-scoped append-only descope ledger (`descope-ledger.sh add` /
+`review`); delivery is blocked while any descope is `unreviewed` or `rejected`.
+Graph delivery additionally requires a passing full-diff `plan-conformance`
+review between Verification and Completion. See `.repomethod/docs/WORKFLOW_GRAPH.md`
+and `.repomethod/docs/PLAN_CONFORMANCE.md`.
+
+A spec may also declare `## Contract Shapes` (compared against a fixed Python
+model adapter by `verify-contracts.sh`) and `## Source Intent` (bound to
+`intents/<feature>.md` and into workflow state; see
+`.repomethod/docs/INTENT_LINEAGE.md`). Both are opt-in and N/A when absent.
+
 ## Delivery Modes
 
 Choose one mode and use its shared skill:
@@ -96,9 +109,11 @@ refused at `init`.
   spec declares `## Plan Obligations`, those obligations must be extracted and
   approved before the aggregate gate can pass.
 - `graph` uses `graph-delivery`: Research, Plan, reviewed plan obligations,
-  developer approval of the proposed execution graph, Implementation, and the
-  same verification loop. Set Research to `single` or `parallel`; add
-  implementation nodes only after Plan and before approval.
+  developer approval of the proposed execution graph, Implementation, the same
+  verification loop, then a required full-diff `plan-conformance` review before
+  Completion (`conform`; see `.repomethod/docs/PLAN_CONFORMANCE.md`). Set
+  Research to `single` or `parallel`; add implementation nodes only after Plan
+  and before approval.
 
 Persist Classic and Graph state under `.repomethod/workflows/` and evidence
 under `.repomethod/evidence/`. The state and repository artifacts must be

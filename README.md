@@ -5,17 +5,26 @@
 
 </div>
 
-**One install, and every coding agent works your repository the same way —
-Claude Code or Codex, locally or in a cloud runner.**
+**RepoMethod installs one engineering method into your Git repository, so every
+coding agent — Claude Code or Codex, local or cloud — delivers work the same
+way: same scope rules, same verification, same "done" bar.**
 
-RepoMethod puts one repository-native engineering method into your project.
-Every agent reads the same scope, verification, and evidence rules from the
-repository, enforced by real shell commands instead of chat context.
+The rules live as plain files in `.repomethod/`, not in a chat prompt. A cold
+agent reads them and starts. Real shell commands — not the model's judgement —
+decide whether a change stayed in scope, whether the tests pass, and whether the
+feature is finished. One `deliver.sh` call returns a single verdict: `done`,
+`blocked`, or `incomplete`.
 
-The defaults are fixed and opinionated, so a cold agent can start immediately.
-They are plain files in your repository, so you can change them when needed.
+Fixed, opinionated defaults that you can edit. No service, no daemon, no
+lock-in. Tested with Claude Code and Codex on macOS and Ubuntu.
 
-Tested with Claude Code and Codex on macOS and Ubuntu.
+It is an open, provider-neutral implementation of the AI-native SDLC — intent →
+spec → deterministic gates → AI in the review loop → governance as code. That
+shape follows the practices in Anthropic's
+[AI-Native SDLC Playbook](https://academy.claude.com/courses/ai-native-sdlc-playbook)
+and the [*Building effective agents*](https://www.anthropic.com/engineering/building-effective-agents)
+principles: a deterministic workflow first, agent autonomy only where it is
+needed.
 
 ## Install
 
@@ -60,9 +69,10 @@ is missing, or the repository's own tests fail, delivery fails — one
   **Graph** — driven by `.repomethod/scripts/feature-workflow.sh`;
 - the repository's own verification command (`.repomethod/verify-command`),
   made mandatory by the completion gate;
-- deterministic gates for scope, forbidden content, reviewed plan obligations,
-  acceptance criteria, evidence, protected paths, and that verification
-  command, closed out with one command;
+- deterministic gates for scope, forbidden content, reviewed plan obligations
+  and their provenance, recorded descopes, declared contract shapes, acceptance
+  criteria, evidence, protected paths, an optional Graph plan-conformance
+  review, and that verification command, closed out with one command;
 - persistent workflow state a second host can resume from a clean checkout;
 - a manifest-aware install / update / uninstall lifecycle that preserves
   managed files you have edited.
@@ -74,7 +84,7 @@ coding agent
     ↓  AGENTS.md / CLAUDE.md pointer block
 .repomethod/AGENTS.md            the contract every agent reads
     ↓  workflow state + spec
-real shell verification          scope · prohibitions · plan obligations · acceptance · evidence · verify-command
+real shell verification          scope · prohibitions · plan obligations & provenance · descopes · contract shapes · acceptance · evidence · verify-command
     ↓
 deterministic delivery verdict   done | blocked | incomplete
 ```
@@ -99,8 +109,9 @@ verification results, so a task started locally resumes unchanged in the cloud.
   correction) and creates no state.
 - **Classic** persists Implementation → command-backed Verification →
   Completion, with a bounded fix loop.
-- **Graph** adds research and an execution graph the developer approves before
-  implementation.
+- **Graph** adds research, an execution graph the developer approves before
+  implementation, and a required full-diff plan-conformance review before
+  completion.
 
 Full commands and state transitions:
 [the workflow reference](blueprint/.repomethod/docs/WORKFLOW_GRAPH.md).
@@ -174,19 +185,18 @@ and that supervisor verdict to one line, `DELIVERY: done | blocked | incomplete
 
 ## Roadmap
 
-RepoMethod is evolving toward a repository-native control layer for the full
-path from engineering intent to a verified pull request, while keeping the
-agent runtime interchangeable.
+RepoMethod is a repository-native control layer for the path from engineering
+intent to a verified pull request, with the agent runtime kept interchangeable.
 
-Near-term work is tracked as concrete GitHub issues, in roughly the order it
-unblocks the rest:
+As of 0.0.2 the method covers locally reproducible CI parity, scope and
+forbidden-content gates, reviewed plan obligations, plan provenance for
+acceptance criteria and integration invariants, an append-only descope ledger,
+contract-shape checks, a required full-diff plan-conformance step before Graph
+completion, and optional intent-to-delivery lineage. The
+[changelog](CHANGELOG.md) classifies every change.
 
-- **Local CI parity** ([#12](https://github.com/frederik-schmittel/repomethod/issues/12)) — make push-readiness locally reproducible with the same repository-owned checks CI executes.
-- **Descope ledger** ([#2](https://github.com/frederik-schmittel/repomethod/issues/2)) — record every dropped plan obligation append-only and block delivery until each descope has a reviewed decision.
-- **Contract-shape checks** ([#4](https://github.com/frederik-schmittel/repomethod/issues/4)) — compare the contract shapes a spec declares against the models the implementation actually builds.
-- **Plan provenance** ([#5](https://github.com/frederik-schmittel/repomethod/issues/5)) — trace acceptance criteria and integration invariants back to reviewed plan obligations, and treat reviewed descopes as resolved rather than orphaned.
-- **Plan conformance** ([#6](https://github.com/frederik-schmittel/repomethod/issues/6)) — require an independent full-diff conformance step before Graph completion.
-- **Intent and artifact lineage** ([#14](https://github.com/frederik-schmittel/repomethod/issues/14)) — preserve the upstream purpose of a feature through spec, plan, implementation, and evidence.
+Near-term work is tracked as concrete GitHub issues:
+
 - **Progressive agent context** ([#15](https://github.com/frederik-schmittel/repomethod/issues/15)) — keep the always-loaded agent contract small and retrieve workflow-specific knowledge only when needed.
 
 Longer-term directions are deliberately recorded here before their interfaces are

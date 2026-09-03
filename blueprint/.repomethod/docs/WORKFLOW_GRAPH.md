@@ -67,7 +67,7 @@ discovering:       Research -> Plan
                                   |
 awaiting_approval: proposed execution DAG -> developer approval
                                                    |
-active:                 Implementation DAG -> Verification loop -> Completion
+active:      Implementation DAG -> Verification loop -> Plan conformance -> Completion
 ```
 
 Initialize a single Research node:
@@ -133,6 +133,14 @@ Execute returned nodes with `start` and `complete`. Run Verification nodes with
 `verify`. Independent nodes can run concurrently up to `config.max_parallel`.
 When a host cannot create parallel workers, follow
 `config.sequential_fallback`; `block` means stop instead of serializing.
+
+In Graph mode a passing Verification does not unlock Completion directly. It
+unlocks a required `plan-conformance` node that reviews the full feature diff
+against the approved plan with a fixed rubric, in a fresh reviewer context.
+Record its verdict with `conform`; a blocked verdict opens a bounded
+`conformance-fix-N -> conformance-verification-N -> plan-conformance-N` retry
+chain. See [PLAN_CONFORMANCE.md](PLAN_CONFORMANCE.md). Classic and Quick MVP
+have no such boundary.
 
 ## Descopes
 
