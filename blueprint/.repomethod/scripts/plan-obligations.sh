@@ -7,7 +7,9 @@
 # feature-scoped JSON artifact. Stable IDs come from explicit anchors, never
 # from statement content. An extraction revision must be reviewed before any
 # downstream gate may consume it. `check` may omit --mode so aggregate gates
-# without workflow state can validate either persistent delivery mode.
+# without workflow state can validate either persistent delivery mode. The
+# optional `invariant_required` metadata is reviewed on the obligation itself
+# and therefore participates in the extraction revision identity.
 set -euo pipefail
 
 command="${1:-}"
@@ -140,12 +142,14 @@ parse_obligations() {
     : > "$parsed"
     [ "$section_count" -eq 1 ] || return 0
 
-    local raw line comment_view in_comment=false anchor type text line_re
+    local raw line comment_view in_comment=false anchor type text metadata invariant_required line_re
     local -A seen=()
     # Literal backticks are part of the declaration grammar, not command
-    # substitutions.
+    # substitutions. The optional ` [invariant_required]` group is reviewed
+    # metadata; group 3 captures it (with its leading space) and group 4 is the
+    # statement text.
     # shellcheck disable=SC2016
-    line_re='^- `([a-z0-9][a-z0-9._-]*)` \[(shape|behaviour|prohibition|process)\] (.+)$'
+    line_re='^- `([a-z0-9][a-z0-9._-]*)` \[(shape|behaviour|prohibition|process)\]( \[invariant_required\])? (.+)$'
 
     while IFS= read -r raw || [ -n "$raw" ]; do
         line="${raw%$'\r'}"
@@ -168,11 +172,16 @@ parse_obligations() {
             # Literal backticks document the required syntax.
             # shellcheck disable=SC2016
             echo 'expected: - `<anchor>` [shape|behaviour|prohibition|process] <statement>' >&2
+            # shellcheck disable=SC2016
+            echo 'optional metadata: - `<anchor>` [shape|behaviour|prohibition|process] [invariant_required] <statement>' >&2
             return 1
         fi
         anchor="${BASH_REMATCH[1]}"
         type="${BASH_REMATCH[2]}"
-        text="${BASH_REMATCH[3]}"
+        metadata="${BASH_REMATCH[3]}"
+        text="${BASH_REMATCH[4]}"
+        invariant_required=false
+        [ -z "$metadata" ] || invariant_required=true
         if [ -n "${seen[$anchor]:-}" ]; then
             echo "error: duplicate Plan Obligations anchor/id collision: $anchor" >&2
             return 1
@@ -184,7 +193,8 @@ parse_obligations() {
             --arg source_ref "${plan_source}#plan-obligations:${anchor}" \
             --arg type "$type" \
             --arg text "$text" \
-            '{id:$id,anchor:$anchor,source_ref:$source_ref,type:$type,text:$text,review_status:"pending"}' \
+            --argjson invariant_required "$invariant_required" \
+            '{id:$id,anchor:$anchor,source_ref:$source_ref,type:$type,text:$text,invariant_required:$invariant_required,review_status:"pending"}' \
             >> "$parsed"
     done < <(
         awk '
@@ -271,6 +281,7 @@ validate_artifact() {
             and (.source_ref | type == "string" and length > 0)
             and (.type == "shape" or .type == "behaviour" or .type == "prohibition" or .type == "process")
             and (.text | type == "string" and length > 0)
+            and ((has("invariant_required") | not) or (.invariant_required | type == "boolean"))
             and (.review_status == "pending" or .review_status == "approved")
         )
         and (.revision_diff | type == "object")
@@ -280,7 +291,10 @@ validate_artifact() {
     ' "$file" >/dev/null 2>&1
 }
 
-canonical="$(jq -r 'sort_by(.id)[] | [.anchor,.type,.text] | @tsv' "$new_core")"
+# Digest compatibility: an obligation without metadata keeps the original
+# three-column canonical form byte-for-byte. The fourth column is emitted only
+# when invariant_required is true, so pre-existing artifacts do not churn.
+canonical="$(jq -r 'sort_by(.id)[] | if .invariant_required then [.anchor,.type,.text,"invariant_required"] else [.anchor,.type,.text] end | @tsv' "$new_core")"
 source_digest="$(printf '%s' "$canonical" | git hash-object --stdin)"
 
 artifact_matches_source() {
@@ -292,8 +306,8 @@ artifact_matches_source() {
     fi
     [ "$(jq -r '.plan_source' "$file")" = "$plan_source" ] || return 1
     [ "$(jq -r '.source_digest' "$file")" = "$source_digest" ] || return 1
-    jq '[.obligations[] | {id,anchor,source_ref,type,text}] | sort_by(.id)' "$file" > "$old_core"
-    jq '[.[] | {id,anchor,source_ref,type,text}] | sort_by(.id)' "$new_core" > "$compare_core"
+    jq '[.obligations[] | {id,anchor,source_ref,type,text,invariant_required:(.invariant_required // false)}] | sort_by(.id)' "$file" > "$old_core"
+    jq '[.[] | {id,anchor,source_ref,type,text,invariant_required}] | sort_by(.id)' "$new_core" > "$compare_core"
     cmp -s "$old_core" "$compare_core"
 }
 
@@ -398,6 +412,7 @@ case "$command" in
                     if ($old_by_id[.id] != null)
                        and ($old_by_id[.id].type == .type)
                        and ($old_by_id[.id].text == .text)
+                       and (($old_by_id[.id].invariant_required // false) == .invariant_required)
                     then $old_by_id[.id].review_status
                     else "pending"
                     end
@@ -413,8 +428,8 @@ case "$command" in
                     changed: [
                         $new[0][]
                         | select($old_by_id[.id] != null)
-                        | select(($old_by_id[.id].type != .type) or ($old_by_id[.id].text != .text))
-                        | {id:.id,before:{type:$old_by_id[.id].type,text:$old_by_id[.id].text},after:{type:.type,text:.text}}
+                        | select(($old_by_id[.id].type != .type) or ($old_by_id[.id].text != .text) or (($old_by_id[.id].invariant_required // false) != .invariant_required))
+                        | {id:.id,before:{type:$old_by_id[.id].type,text:$old_by_id[.id].text,invariant_required:($old_by_id[.id].invariant_required // false)},after:{type:.type,text:.text,invariant_required:.invariant_required}}
                     ]
                 }
             ')"

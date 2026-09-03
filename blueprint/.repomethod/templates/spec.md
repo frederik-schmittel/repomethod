@@ -32,15 +32,19 @@ downstream work packets.>
 
 <!-- Optional for Classic. In Graph, declare every normative statement that
 must survive planning as one explicit, stable anchor before execution approval.
-Use exactly one of: shape, behaviour, prohibition, process.
+Use exactly one of: shape, behaviour, prohibition, process. Add the optional
+[invariant_required] metadata only when review determines that this obligation
+must have a matching integration invariant.
 
 - `response-shape` [shape] Response contains id, status, and result.
-- `retry-order` [behaviour] Failed work is retried before completion.
+- `retry-order` [behaviour] [invariant_required] Failed work is retried before completion.
 - `no-eval` [prohibition] Plan content is never executed through eval.
 - `approval-first` [process] Implementation starts only after plan approval.
 
 Anchors use lowercase letters, digits, dot, underscore, or hyphen and remain
 stable when wording changes. RepoMethod derives IDs as `obl.<anchor>`.
+`invariant_required` is part of the reviewed obligation metadata: adding or
+removing it creates a changed obligation in the next extraction revision.
 After changing this section, rerun `plan-obligations.sh extract` and obtain
 approval for the displayed extraction revision before downstream checks consume
 it. Quick MVP has no spec and therefore no plan obligations.
@@ -110,9 +114,15 @@ A backtick cell in `Test/Evidence` is enforced by the gate: a path under
 (a test name) must appear literally in an evidence file. Free text or an
 `<placeholder>` stays a checkbox-only check.
 
-| Criterion | Test/Evidence | Work Packet |
-| --- | --- | --- |
-| 1 | `<exact test or evidence path>` | `<packet-id>` |
+`Plan Ref` is provenance data. Leave it empty or use `-` when a criterion has
+no plan-obligation provenance. Otherwise use one or more exact backticked
+`obl.<anchor>` IDs separated by commas. Unknown or malformed IDs fail closed.
+References in this feature spec and its declared work packets are aggregated by
+`verify-provenance.sh`; duplicate references count once.
+
+| Criterion | Test/Evidence | Work Packet | Plan Ref |
+| --- | --- | --- | --- |
+| 1 | `<exact test or evidence path>` | `<packet-id>` | `obl.<anchor>` |
 
 ## Work Packets
 
@@ -138,19 +148,20 @@ tests?,.*/\1/'`. If set, the acceptance report must contain a line
 
 ## Integration Invariants
 
-<Optional, but mandatory for every spec with budget, retry, or report
-aggregation logic. Shell lines as backtick bullets, executed top to bottom
-from the repo root; each must end with status 0. The first line(s) produce
-the smoke artifact, the following ones check it. Green unit tests alone no
-longer suffice once invariants are declared. Invariants must be read-only or
-write only to git-ignored paths — a `.tmp.` infix under
-`.repomethod/evidence/` is ignored by the shipped gitignore, `$TMPDIR` also
-works. An invariant that dirties a tracked path fails the check and would
-otherwise stall `supervisor.sh` in `continue` forever.>
+<Optional. Legacy entries use `- `<command>`` and are executed as before.
+When an approved plan obligation carries `invariant_required: true`, at least
+one entry must bind that exact obligation ID using
+`- `obl.<anchor>`: `<command>``. The explicit obligation metadata is the hard
+coverage contract. Keyword matching for error/order/edge-case language may
+warn only.
 
-- `<cli> scan ./tests/fixtures/repo > .repomethod/evidence/smoke.tmp.jsonl`
-- `test "$(grep -c budget_exhausted .repomethod/evidence/smoke.tmp.jsonl)" -le 5`
-- `jq -e '.status' .repomethod/evidence/smoke-report.tmp.json`
+Invariants run top to bottom from the repo root and each command must end with
+status 0. They must be read-only or write only to git-ignored paths — a
+`.tmp.` infix under `.repomethod/evidence/` is ignored by the shipped
+gitignore, and `$TMPDIR` also works.>
+
+- `obl.retry-order`: `<cli> smoke ./tests/fixtures/repo`
+- `<another integration assertion>`
 
 ## Expected Evidence
 
