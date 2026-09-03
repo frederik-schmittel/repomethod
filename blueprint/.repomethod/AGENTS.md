@@ -23,6 +23,7 @@ Manage repository skills only through `.repomethod/scripts/manage-skills.sh`.
 .repomethod/scripts/verify.sh .            # runs .repomethod/verify-command
 .repomethod/scripts/verify-scope.sh --spec <spec> --repo .
 .repomethod/scripts/verify-forbidden.sh --spec <spec> --repo .
+.repomethod/scripts/intent-lineage.sh check --spec <spec> [--state <file>] --repo .   # optional ## Source Intent lineage; N/A when the spec does not opt in
 .repomethod/scripts/plan-obligations.sh check [--mode <classic|graph>] --spec <spec> --repo .   # --mode optional; agent-gate binds it from --state
 .repomethod/scripts/verify-contracts.sh --spec <spec>
 .repomethod/scripts/verify-acceptance.sh --spec <spec> --report .repomethod/evidence/report.md
@@ -48,6 +49,9 @@ supervisor) then reuses that pinned SHA instead of re-resolving. An explicit
 
 `agent-gate.sh --spec` also runs `verify-forbidden` (the optional
 `## Must Not Exist` section is enforced inside the declared Scope),
+`intent-lineage.sh check` (an optional `## Source Intent` binding to
+`intents/<feature>.md` must match the exact intent bytes, and with `--state` the
+stored workflow `intent_lineage`; see [docs/INTENT_LINEAGE.md](docs/INTENT_LINEAGE.md)),
 `plan-obligations.sh check` (declared plan obligations require a current,
 approved extraction before acceptance/evidence gates run), `verify-report`
 (the acceptance report must name its spec, and if the spec declares a

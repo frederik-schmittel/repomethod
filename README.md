@@ -119,6 +119,9 @@ structural gates and trusts only their exit status:
   inside the spec's Scope and off protected paths;
 - `verify-forbidden.sh` — an optional `## Must Not Exist` section rejects
   forbidden content in files whose paths match the spec's Scope;
+- `intent-lineage.sh check` — if the spec declares `## Source Intent`, its
+  canonical binding must match the exact `intents/<feature>.md` bytes, and with
+  workflow state the stored `intent_lineage`; specs that do not opt in are N/A;
 - `plan-obligations.sh check` — if the spec declares `## Plan Obligations`
   entries, the current feature-scoped extraction must exist, match the spec and
   workflow mode when state is supplied, and be approved;

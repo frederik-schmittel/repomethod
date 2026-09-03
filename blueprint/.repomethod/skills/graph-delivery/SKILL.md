@@ -21,6 +21,11 @@ investigated independently. The runner starts in `discovering`; Research is
 runnable without approval. Record each Research node with `start` and
 `complete`, then do the same for Plan.
 
+If `specs/<slug>.md` declares `## Source Intent`, `init` validates that binding
+and stores it as `intent_lineage`; every later subcommand reverifies it and
+fails closed on drift (see `.repomethod/docs/INTENT_LINEAGE.md`). Re-pin with
+`intent-lineage.sh pin` and re-run `init` after any intent edit.
+
 Completing Plan changes the state to `awaiting_approval`. The proposed execution
 graph can now be changed with `add-task`, `add-node`, `edit-node`,
 `remove-node`, and `set-retries`. Show one final `preview` containing the state
