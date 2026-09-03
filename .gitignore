@@ -1,5 +1,6 @@
 .repomethod/backups/
 graphify-out/
+test-results/
 *.tmp
 .DS_Store
 .claude/
