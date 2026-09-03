@@ -14,6 +14,7 @@
 0	tests/lib_manifest.bats
 0	tests/lib_skills.bats
 0	tests/lib_target.bats
+0	tests/plan_conformance.bats
 0	tests/skill_compliance_review.bats
 0	tests/skill_docs_sync.bats
 0	tests/skill_scoped_delivery.bats

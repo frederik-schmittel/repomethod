@@ -39,26 +39,58 @@ parallel workers, follow `config.sequential_fallback`; stop if it is `block`.
 
 Run every Verification node with `verify`. The configured command's exit status
 controls the result. Failure creates a bounded Fix-N followed by
-Verification-N. Completion requires a passing verification command.
+Verification-N.
+
+In Graph mode a passing Verification does **not** unlock Completion directly.
+It unlocks the required `plan-conformance` node. Dispatch marks this node with
+`fresh_context_required: true`; run it in a fresh reviewer context that has not
+implemented the feature. Start the node to generate the authoritative review
+bundle:
+
+```bash
+.repomethod/scripts/workflow-graph.sh start --state "$STATE" --node plan-conformance
+```
+
+The returned bundle pins the workflow `config.base_ref` and supplies the
+approved plan snapshot, reviewed `obl.<anchor>` plan obligations, canonical
+descope state, full feature diff, and
+`.repomethod/templates/plan-conformance-rubric.md`. Review only those generated
+authorities. Write the rubric's machine-readable verdict JSON, then record it:
+
+```bash
+.repomethod/scripts/workflow-graph.sh conform --state "$STATE" \
+  --node plan-conformance \
+  --verdict .repomethod/evidence/<feature>-review.json
+```
+
+A passing verdict unlocks Completion only while its snapshot remains current.
+Any relevant diff, approved-plan, obligation, descope, or rubric change makes
+that result stale. A blocked verdict creates a numbered
+`conformance-fix-N -> conformance-verification-N -> plan-conformance-N` retry
+chain. The retry conformance node also requires a fresh reviewer context.
+Unreviewed or rejected descopes, untreated orphan obligations, or open verdict
+blockers must not be waived in prose.
 
 The JSON state is the handoff between local sessions, cloud sessions, Claude,
 and Codex. Pass artifact paths through the graph instead of copied chat history.
 Provider-specific worker creation stays outside the runner. That only works if
-the artifacts are committed: after research, after plan approval, and after
-every node, `git add specs/<feature>.md specs/packets .repomethod/workflows
-.repomethod/evidence && git commit`. An untracked spec, state, packet, or
-research file is invisible to a fresh clone or cloud agent.
+the artifacts are committed: after research, after plan approval, after every
+node, and after plan conformance, `git add specs/<feature>.md specs/packets
+.repomethod/workflows .repomethod/evidence && git commit`. An untracked spec,
+state, packet, research file, conformance context, or verdict is invisible to a
+fresh clone or cloud agent.
 
 Before ending a turn while the graph is active, record a machine-readable
 handoff with `.repomethod/scripts/workflow-graph.sh handoff --state <file>
 --node <id> --next "<step>" [--changed <csv>] [--blocker "<text>"] [--claim
-complete|needs_human]`. Close out with
-`.repomethod/scripts/deliver.sh --spec <spec> --state <file>`; it runs the
-stateful gate and `supervisor.sh check`, and only `DELIVERY: done — <reason>`
-(exit 0) confirms delivery. That result now also requires a fresh handoff,
-committed plan artifacts, and green integration invariants
-(`## Integration Invariants` in the spec).
+complete|needs_human]`. The handoff includes the current plan-conformance
+status.
 
-Stop for an ambiguous approval, stale revision, protected path, missing
-evidence, unresolved security or architecture decision, human gate, blocker,
-or exhausted retry limit.
+Close out only with `.repomethod/scripts/deliver.sh --spec <spec> --state <file>`.
+It runs the stateful gate and `supervisor.sh check`, and only `DELIVERY: done — <reason>`
+(exit 0) confirms delivery. For Graph workflows that also requires a current
+passing plan-conformance snapshot.
+
+Stop for an ambiguous approval, stale revision or conformance result, protected
+path, missing evidence, unresolved security or architecture decision, human
+gate, blocker, unreviewed/rejected descope, or exhausted retry limit.
