@@ -172,9 +172,19 @@ spec_rel="specs/${feature}.md"
 
 fingerprint() {
     local evidence_dir="${repo_root}/.repomethod/evidence" ev_names="" ev_hash="none" hf_hash="none"
-    local state_proj git_head git_porcelain
+    local state_proj git_head git_porcelain obl_hash="none" descopes_hash="none"
     state_proj="$(jq -S '{design_revision, retry_count, status, events:(.events|length),
+        conformance_retry_count:(.conformance_retry_count // 0),
         nodes:[.nodes[]|{id,status,outcome,attempt}]}' "$state")"
+    # Review authorities live under .repomethod/workflows/ (filtered out of
+    # git_porcelain because the runner rewrites that dir every check) but change
+    # only on real extraction/approval or a descope decision. Fold their content
+    # in so a plan-obligation approval or descope review registers as progress.
+    if [ -f "${repo_root}/.repomethod/workflows/${feature}.plan-obligations.json" ]; then
+        obl_hash="$(sha256 < "${repo_root}/.repomethod/workflows/${feature}.plan-obligations.json")"
+    fi
+    descopes_hash="$("${here}/descope-ledger.sh" state --state "$state" 2>/dev/null \
+        | jq -S . 2>/dev/null | sha256 2>/dev/null || echo none)"
     git_head="$(git -C "$repo_root" rev-parse HEAD 2>/dev/null || echo none)"
     # Drop RepoMethod's own runtime dirs: the supervisor and workflow runner
     # write there every check, and that is not agent progress.
@@ -188,8 +198,9 @@ fingerprint() {
             | LC_ALL=C sort -z | xargs -0 cat 2>/dev/null | sha256)"
     fi
     [ -f "$handoff_path" ] && hf_hash="$(sha256 < "$handoff_path")"
-    printf '%s\n--\n%s\n--\n%s\n--\n%s\n--\n%s\n--\n%s\n' \
-        "$state_proj" "$git_head" "$git_porcelain" "$ev_names" "$ev_hash" "$hf_hash" | sha256
+    printf '%s\n--\n%s\n--\n%s\n--\n%s\n--\n%s\n--\n%s\n--\n%s\n--\n%s\n' \
+        "$state_proj" "$git_head" "$git_porcelain" "$ev_names" "$ev_hash" "$hf_hash" \
+        "$obl_hash" "$descopes_hash" | sha256
 }
 
 # --- one check ----------------------------------------------------------------

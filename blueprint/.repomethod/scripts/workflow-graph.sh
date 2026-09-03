@@ -5,6 +5,7 @@ set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 descope_ledger="${here}/descope-ledger.sh"
+plan_conformance="${here}/plan-conformance.sh"
 
 die() {
     echo "workflow-graph: $*" >&2
@@ -35,6 +36,7 @@ usage:
   workflow-graph.sh reject --state <file> --node <id> --reason <text>
   workflow-graph.sh add-task --state <file> --id <id> --goal <text> [--depends <csv>]   (the first add-task replaces the default implementation node)
   workflow-graph.sh handoff --state <file> --node <id> --next <text> [--changed <csv>] [--blocker <text>] [--claim <complete|needs_human>]
+  workflow-graph.sh conform --state <file> --node <plan-conformance-id> --verdict <verdict.json>   (Graph only; records the fixed-rubric verdict, creates a numbered retry sub-graph on blockers)
 EOF
 }
 
@@ -265,7 +267,7 @@ dispatch_json() {
                   | select(.id == $dependency)
                   | {node_id:.id, outcome, outputs, evidence}
                 ],
-                fresh_context_required: ($node.type == "verification"),
+                fresh_context_required: ($node.type == "verification" or $node.type == "plan-conformance"),
                 _order: $node.order
               };
         ([
@@ -305,7 +307,10 @@ preview_workflow() {
           | sort_by(.order, .id)[]
           | [.id, .type, .role, (.dependencies | join(",")), (.human_gate | tostring), .goal]
           | @tsv),
-        "bounded feedback loop: verification command pass -> completion; failure -> fix-N -> verification-N (maximum \(.max_retries) retries)"
+        "bounded feedback loop: verification command pass -> completion; failure -> fix-N -> verification-N (maximum \(.max_retries) retries)",
+        (if .mode == "graph"
+         then "plan conformance: verification -> plan-conformance -> completion is mandatory; the plan-conformance node dispatches with a fresh reviewer context"
+         else empty end)
     ' "$state"
 }
 
@@ -338,8 +343,14 @@ validate_graph_approval_request() {
           | any($nodes[] | select(.type == "verification"); depends_on(.id; $implementation)))
         and all($nodes[] | select(.type == "verification");
           depends_on("completion"; .id))
+        and ([$nodes[] | select(.type == "plan-conformance")] | length) == 1
+        and any($nodes[]; .id == "plan-conformance" and .type == "plan-conformance")
+        and all($nodes[] | select(.type == "verification");
+          .id as $verification
+          | any($nodes[] | select(.type == "plan-conformance"); (.dependencies | index($verification)) != null))
+        and depends_on("completion"; "plan-conformance")
     ' "$state" >/dev/null \
-        || die "graph invalid: completion must depend on Plan, Implementation, and every Verification node"
+        || die "graph invalid: completion must depend on Plan, Implementation, every Verification, and plan-conformance, and every Verification must feed plan-conformance"
 }
 
 record_graph_approval() {
@@ -350,6 +361,15 @@ record_graph_approval() {
         (.events | length + 1) as $seq
         | .status = "active"
         | .updated_at = $at
+        | (if .mode == "graph" then
+            .approved_plan = {
+              revision: .design_revision,
+              approved_at: $at,
+              approval_evidence: $evidence,
+              plan: ([.nodes[] | select(.id == "plan")][0] | {id, goal, outputs, evidence, outcome}),
+              nodes: [.nodes[] | {id, type, role, goal, dependencies, human_gate, order}]
+            }
+          else . end)
         | .events += [{seq:$seq, at:$at, action:"graph_approved", node_id:"plan", detail:("developer approved displayed revision " + ($revision | tostring)), evidence:$evidence}]
     ' --arg at "$at" --argjson revision "$requested_revision" --argjson evidence "$evidence_json"
 }
@@ -480,6 +500,107 @@ _run_verification_into_evidence() {
     printf '%s\n' "$verify_status"
 }
 
+# Move a pending plan-conformance node to in_progress with the generated
+# review-context bundle (approved plan, obligations, full feature diff,
+# descopes, rubric) as its inputs. Echoes the bundle.
+start_conformance_node() {
+    local node_id="$1" prep
+    prep="$("$plan_conformance" prepare --state "$state" --node "$node_id")" \
+        || die "cannot prepare plan-conformance context for $node_id"
+    start_node "$node_id"
+    update_state '(.nodes[] | select(.id == $id) | .inputs) = $inputs' \
+        --arg id "$node_id" --argjson inputs "$(jq -c '.inputs' <<< "$prep")"
+    printf '%s\n' "$prep"
+}
+
+# Apply a recorded plan-conformance verdict (normalized JSON from
+# plan-conformance.sh record) to the graph. On pass the node is
+# completed/passed. On blockers it is completed/failed and a numbered
+# fix -> verification -> plan-conformance retry sub-graph is spliced ahead of
+# every node that depended on the failed one, up to max_retries; at the limit
+# the workflow and its completion node are blocked. Echoes the verdict; returns
+# 0 on pass, 2 otherwise.
+conformance_result() {
+    local node_id="$1" normalized="$2"
+    local overall feature verdict_rel context_rel diff_rel at snapshot_json blockers_json
+    overall="$(jq -r '.overall' <<< "$normalized")"
+    feature="$(jq -r '.feature' "$state")"
+    verdict_rel=".repomethod/evidence/${feature}-$(jq -r '.node_id' <<< "$normalized")-verdict.json"
+    context_rel="$(jq -r '.context' <<< "$normalized")"
+    diff_rel="$(jq -r '.diff' <<< "$normalized")"
+    snapshot_json="$(jq -c '.snapshot' <<< "$normalized")"
+    blockers_json="$(jq -c '.blockers' <<< "$normalized")"
+    at="$(now_utc)"
+
+    if [ "$overall" = "pass" ]; then
+        update_state '
+            (.events | length + 1) as $seq
+            | .nodes |= map(if .id == $id then
+                .status = "completed" | .outcome = "passed"
+                | .outputs = [$verdict] | .evidence = [$context, $diff, $verdict]
+                | .conformance = {snapshot: $snapshot, verdict_path: $verdict, blockers: $blockers}
+              else . end)
+            | .updated_at = $at
+            | .events += [{seq:$seq, at:$at, action:"plan_conformance_passed", node_id:$id, detail:"full feature diff conforms to the approved plan", evidence:[$context, $diff, $verdict]}]
+        ' --arg id "$node_id" --arg at "$at" --arg verdict "$verdict_rel" \
+            --arg context "$context_rel" --arg diff "$diff_rel" \
+            --argjson snapshot "$snapshot_json" --argjson blockers "$blockers_json"
+        printf '%s\n' "$normalized"
+        return 0
+    fi
+
+    local retries max_retries retry fix_id verify_id conform_id fo
+    retries="$(jq -r '.conformance_retry_count // 0' "$state")"
+    max_retries="$(jq -r '.max_retries' "$state")"
+    if [ "$retries" -lt "$max_retries" ]; then
+        retry=$((retries + 1))
+        fix_id="conformance-fix-${retry}"
+        verify_id="conformance-verification-${retry}"
+        conform_id="plan-conformance-${retry}"
+        fo=$((60 + retry * 3))
+        update_state '
+            (.events | length + 1) as $seq
+            | .nodes |= map(if .id == $id then
+                .status = "completed" | .outcome = "failed"
+                | .outputs = [$verdict] | .evidence = [$context, $diff, $verdict]
+                | .conformance = {snapshot: $snapshot, verdict_path: $verdict, blockers: $blockers}
+              else . end)
+            | .nodes += [
+                {id:$fix_id, type:"fix", status:"pending", goal:"Correct blockers from the plan-conformance review", role:"Implementer", dependencies:[$id], inputs:[$verdict], outputs:[], evidence:[], human_gate:false, outcome:null, attempt:0, order:$fo},
+                {id:$verify_id, type:"verification", status:"pending", goal:"Re-run the configured verification command after conformance fixes", role:"Verifier", dependencies:[$fix_id], inputs:[$fix_id], outputs:[], evidence:[], human_gate:false, outcome:null, attempt:0, order:($fo + 1)},
+                {id:$conform_id, type:"plan-conformance", status:"pending", goal:"Re-review the full feature diff against the approved plan", role:"Plan Reviewer", dependencies:[$verify_id], inputs:[$verify_id], outputs:[], evidence:[], human_gate:false, outcome:null, attempt:0, order:($fo + 2)}
+              ]
+            | .nodes |= map(
+                if .id != $fix_id and .id != $verify_id and .id != $conform_id and (.dependencies | index($id)) != null
+                then .dependencies |= map(if . == $id then $conform_id else . end)
+                else . end)
+            | .conformance_retry_count = $retry
+            | .updated_at = $at
+            | .events += [{seq:$seq, at:$at, action:"plan_conformance_failed", node_id:$id, detail:("blockers require retry " + ($retry | tostring)), evidence:[$context, $diff, $verdict]}]
+        ' --arg id "$node_id" --arg at "$at" --arg verdict "$verdict_rel" \
+            --arg context "$context_rel" --arg diff "$diff_rel" \
+            --arg fix_id "$fix_id" --arg verify_id "$verify_id" --arg conform_id "$conform_id" \
+            --argjson retry "$retry" --argjson fo "$fo" \
+            --argjson snapshot "$snapshot_json" --argjson blockers "$blockers_json"
+    else
+        update_state '
+            (.events | length + 1) as $seq
+            | .nodes |= map(
+                if .id == $id then .status = "completed" | .outcome = "failed"
+                  | .outputs = [$verdict] | .evidence = [$context, $diff, $verdict]
+                  | .conformance = {snapshot: $snapshot, verdict_path: $verdict, blockers: $blockers}
+                elif .id == "completion" then .status = "blocked" | .outcome = "conformance_retry_limit"
+                else . end)
+            | .status = "blocked" | .updated_at = $at
+            | .events += [{seq:$seq, at:$at, action:"plan_conformance_retry_limit_reached", node_id:$id, detail:"plan-conformance blockers remain after the retry limit", evidence:[$context, $diff, $verdict]}]
+        ' --arg id "$node_id" --arg at "$at" --arg verdict "$verdict_rel" \
+            --arg context "$context_rel" --arg diff "$diff_rel" \
+            --argjson snapshot "$snapshot_json" --argjson blockers "$blockers_json"
+    fi
+    printf '%s\n' "$normalized"
+    return 2
+}
+
 command="${1:-}"
 [ -n "$command" ] || { usage; exit 1; }
 shift
@@ -500,6 +621,7 @@ case "$command" in
         base_ref_set=false
         node_goal_ids=()
         node_goal_values=()
+        pc_goal="Review the full feature diff against the approved plan with the fixed conformance rubric"
         while [ "$#" -gt 0 ]; do
             case "$1" in
                 --feature) require_value "$@"; feature="$2"; shift 2 ;;
@@ -520,8 +642,14 @@ case "$command" in
                     if [ "$#" -lt 3 ] || [ -z "$2" ] || [ -z "$3" ]; then
                         die "--node-goal requires <id> <text>"
                     fi
-                    node_goal_ids+=("$2")
-                    node_goal_values+=("$3")
+                    # The plan-conformance node is spliced in after the base
+                    # graph is built, so its goal cannot flow through apply_goals.
+                    if [ "$2" = "plan-conformance" ]; then
+                        pc_goal="$3"
+                    else
+                        node_goal_ids+=("$2")
+                        node_goal_values+=("$3")
+                    fi
                     shift 3
                     ;;
                 *) die "unknown init option: $1" ;;
@@ -656,10 +784,26 @@ case "$command" in
             rm -f "$state"
             die "failed to initialize descope ledger"
         fi
+        # Graph gets a mandatory plan-conformance boundary between verification
+        # and completion. Classic and Quick MVP are untouched.
+        if [ "$mode" = "graph" ]; then
+            update_state '
+                .conformance_retry_count = 0
+                | .nodes += [{
+                    id: "plan-conformance", type: "plan-conformance", status: "pending",
+                    goal: $goal, role: "Plan Reviewer",
+                    dependencies: ["verification"], inputs: ["verification"],
+                    outputs: [], evidence: [], human_gate: false, outcome: null, attempt: 0, order: 55
+                  }]
+                | .nodes |= map(if .id == "completion"
+                    then .dependencies = ["plan-conformance"] | .inputs = ["plan-conformance"]
+                    else . end)
+            ' --arg goal "$pc_goal"
+        fi
         dispatch_json
         ;;
 
-    preview|add-node|edit-node|remove-node|set-retries|approve-graph|approve-and-dispatch|dispatch|next|status|start|complete|verify|reverify|fail|block|approve|reject|add-task|handoff)
+    preview|add-node|edit-node|remove-node|set-retries|approve-graph|approve-and-dispatch|dispatch|next|status|start|complete|verify|reverify|fail|block|approve|reject|add-task|handoff|conform)
         state=""
         node=""
         task_id=""
@@ -674,6 +818,7 @@ case "$command" in
         reason=""
         revision=""
         approval_text=""
+        verdict_file=""
         max_retries=""
         changed=""
         next_step=""
@@ -702,6 +847,7 @@ case "$command" in
                 --reason) require_value "$@"; reason="$2"; shift 2 ;;
                 --revision) require_value "$@"; revision="$2"; shift 2 ;;
                 --approval-text) require_value "$@"; approval_text="$2"; shift 2 ;;
+                --verdict) require_value "$@"; verdict_file="$2"; shift 2 ;;
                 --max-retries) require_value "$@"; max_retries="$2"; shift 2 ;;
                 --changed) require_value "$@"; changed="$2"; shift 2 ;;
                 --next) require_value "$@"; next_step="$2"; shift 2 ;;
@@ -763,6 +909,7 @@ case "$command" in
                 [ -n "$order" ] || die "--order is required"
                 validate_design_id "$task_id"
                 validate_id "$node_type"
+                [ "$node_type" != "plan-conformance" ] || die "plan-conformance is a reserved node type"
                 validate_non_negative_integer "--order" "$order"
                 case "$human_gate" in true|false) ;; *) die "--human-gate must be true or false" ;; esac
                 jq -e --arg id "$task_id" 'all(.nodes[]; .id != $id)' "$state" >/dev/null \
@@ -790,10 +937,10 @@ case "$command" in
                     die "edit-node requires at least one changed field"
                 fi
                 if $type_set; then validate_id "$node_type"; fi
-                if $type_set && { [ "$node" = "verification" ] || [ "$node" = "completion" ]; }; then
+                if $type_set && { [ "$node" = "verification" ] || [ "$node" = "completion" ] || [ "$node" = "plan-conformance" ]; }; then
                     die "cannot change required boundary node type: $node"
                 fi
-                if $depends_set && { [ "$node" = "verification" ] || [ "$node" = "completion" ]; }; then
+                if $depends_set && { [ "$node" = "verification" ] || [ "$node" = "completion" ] || [ "$node" = "plan-conformance" ]; }; then
                     die "cannot change required boundary node dependencies: $node (add-task rewires verification automatically)"
                 fi
                 if $order_set; then validate_non_negative_integer "--order" "$order"; fi
@@ -829,7 +976,7 @@ case "$command" in
             remove-node)
                 require_proposal_phase
                 [ -n "$node" ] || die "--node is required"
-                case "$node" in research|research-*|plan|verification|completion) die "cannot remove required node: $node" ;; esac
+                case "$node" in research|research-*|plan|verification|completion|plan-conformance) die "cannot remove required node: $node" ;; esac
                 jq -e --arg id "$node" 'any(.nodes[]; .id == $id)' "$state" >/dev/null \
                     || die "unknown node: $node"
                 dependents="$(jq -r --arg id "$node" '[.nodes[] | select(.dependencies | index($id)) | .id] | join(",")' "$state")"
@@ -884,7 +1031,12 @@ case "$command" in
                 ;;
             start)
                 [ -n "$node" ] || die "--node is required"
-                start_node "$node"
+                node_type="$(jq -r --arg id "$node" '[.nodes[] | select(.id == $id) | .type][0] // ""' "$state")"
+                if [ "$node_type" = "plan-conformance" ]; then
+                    start_conformance_node "$node"
+                else
+                    start_node "$node"
+                fi
                 ;;
             complete)
                 [ -n "$node" ] || die "--node is required"
@@ -894,6 +1046,8 @@ case "$command" in
                 [ -n "$node_type" ] || die "unknown node: $node"
                 [ "$node_type" != "verification" ] \
                     || die "verification cannot be completed manually; use verify"
+                [ "$node_type" != "plan-conformance" ] \
+                    || die "plan-conformance cannot be completed manually; use conform"
                 validate_evidence "$evidence"
                 current_status="$(jq -r --arg id "$node" '.nodes[] | select(.id == $id) | .status' "$state")"
                 if [ "$current_status" = "pending" ]; then
@@ -905,6 +1059,10 @@ case "$command" in
                 fi
                 [ "$current_status" = "in_progress" ] || die "node is not in progress: $node"
                 if [ "$node_type" = "completion" ]; then
+                    # Graph delivery cannot close without a current, passing
+                    # plan-conformance verdict. NOT_APPLICABLE (Classic) passes.
+                    "$plan_conformance" check --state "$state" >/dev/null \
+                        || die "completion is blocked: plan conformance is missing, stale, or blocked"
                     # Re-checked here, not only at approval: the state file is committed and
                     # editable, and validate_state_file asserts structure and acyclicity but
                     # not this invariant. A verification node superseded by a retry ends
@@ -1030,6 +1188,10 @@ case "$command" in
                 validate_evidence "$evidence"
                 [ "$(jq -r --arg id "$node" '[.nodes[] | select(.id == $id) | .status][0] // ""' "$state")" = "awaiting_human" ] \
                     || die "node is not awaiting human approval: $node"
+                if [ "$(jq -r --arg id "$node" '[.nodes[] | select(.id == $id) | .type][0] // ""' "$state")" = "completion" ]; then
+                    "$plan_conformance" check --state "$state" >/dev/null \
+                        || die "completion is blocked: plan conformance is missing, stale, or blocked"
+                fi
                 evidence_json="$(csv_json "$evidence")"
                 at="$(now_utc)"
                 update_state '
@@ -1082,6 +1244,12 @@ case "$command" in
                 descope_state="$($descope_ledger state --state "$state")" \
                     || die "cannot write handoff while descope ledger is invalid"
                 feature="$(jq -r '.feature' "$state")"
+                # Graph handoffs carry the current plan-conformance status so the
+                # supervisor and the next agent see it without re-deriving it.
+                pc_status_json='null'
+                if [ "$(jq -r '.mode' "$state")" = "graph" ]; then
+                    pc_status_json="$("$plan_conformance" status --state "$state" 2>/dev/null || echo 'null')"
+                fi
                 at="$(now_utc)"
                 handoff_path="$(dirname "$state")/${feature}.handoff.json"
                 tmp="$(mktemp "${handoff_path}.XXXXXX")"
@@ -1091,6 +1259,7 @@ case "$command" in
                     --argjson changed "$changed_json" --argjson blocker "$blocker_json" \
                     --argjson descopes "$(jq -c '.descopes' <<< "$descope_state")" \
                     --argjson open_descope_ids "$(jq -c '.blocking_ids' <<< "$descope_state")" \
+                    --argjson plan_conformance "$pc_status_json" \
                     --slurpfile state "$state" '
                     {
                       schema_version: 1,
@@ -1104,11 +1273,31 @@ case "$command" in
                       workflow_status: $state[0].status,
                       workflow_revision: $state[0].design_revision,
                       descopes: $descopes,
-                      open_descope_ids: $open_descope_ids
+                      open_descope_ids: $open_descope_ids,
+                      plan_conformance: $plan_conformance
                     }
                 ' > "$tmp" || { rm -f "$tmp"; die "failed to render handoff"; }
                 mv "$tmp" "$handoff_path"
                 echo "handoff written: $handoff_path"
+                ;;
+            conform)
+                [ -n "$node" ] || die "--node is required"
+                [ -n "$verdict_file" ] || die "--verdict is required"
+                [ "$(jq -r '.mode' "$state")" = "graph" ] \
+                    || die "plan conformance applies only to Graph workflows"
+                node_type="$(jq -r --arg id "$node" '[.nodes[] | select(.id == $id) | .type][0] // ""' "$state")"
+                [ "$node_type" = "plan-conformance" ] || die "node is not a plan-conformance node: $node"
+                node_status="$(jq -r --arg id "$node" '[.nodes[] | select(.id == $id) | .status][0] // ""' "$state")"
+                if [ "$node_status" = "pending" ]; then
+                    start_conformance_node "$node" >/dev/null
+                elif [ "$node_status" != "in_progress" ]; then
+                    die "plan-conformance node is not runnable or in progress: $node"
+                fi
+                normalized="$("$plan_conformance" record --state "$state" --node "$node" --verdict "$verdict_file")" \
+                    || die "plan-conformance verdict rejected"
+                conform_rc=0
+                conformance_result "$node" "$normalized" || conform_rc=$?
+                [ "$conform_rc" -eq 0 ] || exit "$conform_rc"
                 ;;
         esac
         ;;

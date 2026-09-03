@@ -131,6 +131,15 @@ if [ "$(printf '%s' "$descope_meta" | jq '.blocking_ids | length')" -gt 0 ]; the
     exit 1
 fi
 
+# Graph delivery has one additional authoritative boundary. Keep this check
+# Graph-only so copied/standalone Classic and Quick delivery behavior remains
+# unchanged. A Graph result must be present, passing, and current before the
+# supervisor is allowed to produce a terminal done verdict.
+if [ "$(jq -r '.mode // empty' "$state" 2>/dev/null)" = "graph" ]; then
+    run_block "${here}/plan-conformance.sh" check --state "$state"
+    [ "$rc" -eq 0 ] || blocked_from_cap "plan conformance is missing, stale, or blocked"
+fi
+
 run_block "${here}/supervisor.sh" check --state "$state"
 sup_rc="$rc"
 

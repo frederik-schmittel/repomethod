@@ -4,8 +4,12 @@ setup() {
     bats_require_minimum_version 1.5.0  # `run --separate-stderr` below
     WRAPPER="${REPO_ROOT}/blueprint/.repomethod/scripts/feature-workflow.sh"
     GRAPH="${REPO_ROOT}/blueprint/.repomethod/scripts/workflow-graph.sh"
+    PLAN="${REPO_ROOT}/blueprint/.repomethod/scripts/plan-obligations.sh"
+    RUBRIC="${REPO_ROOT}/blueprint/.repomethod/templates/plan-conformance-rubric.md"
     WORK="$(mktemp -d)"
-    STATE="${WORK}/feature.json"
+    # Keep the state where a real install keeps it so it, and the test's own
+    # node evidence/outputs, stay out of the plan-conformance feature diff.
+    STATE="${WORK}/.repomethod/workflows/feature.json"
     # Isolate: these tests drive `feature-workflow.sh init` with no explicit
     # working dir, so a real repo-root .repomethod/verify-command (T4 installs
     # one that runs `bats tests/*.bats`) would make assert_baseline_green
@@ -17,8 +21,9 @@ setup() {
     # T4 makes preflight (a missing .repomethod/verify-command is a HARD finding)
     # the first step of `feature-workflow.sh init`; give the sandbox a trivial
     # verify-command so the wrapper-driven init tests reach the logic they test.
-    mkdir -p "${WORK}/.repomethod"
+    mkdir -p "${WORK}/.repomethod/workflows" "${WORK}/.repomethod/templates" "${WORK}/specs"
     printf 'true\n' > "${WORK}/.repomethod/verify-command"
+    cp "$RUBRIC" "${WORK}/.repomethod/templates/plan-conformance-rubric.md"
     cd "$WORK"
 }
 
@@ -28,9 +33,9 @@ teardown() {
 
 evidence_for() {
     local node="$1"
-    mkdir -p "${WORK}/evidence" "${WORK}/outputs"
-    printf 'evidence for %s\n' "$node" > "${WORK}/evidence/${node}.txt"
-    printf 'output for %s\n' "$node" > "${WORK}/outputs/${node}.md"
+    mkdir -p "${WORK}/.repomethod/evidence" "${WORK}/.repomethod/outputs"
+    printf 'evidence for %s\n' "$node" > "${WORK}/.repomethod/evidence/${node}.txt"
+    printf 'output for %s\n' "$node" > "${WORK}/.repomethod/outputs/${node}.md"
 }
 
 complete_node() {
@@ -38,8 +43,8 @@ complete_node() {
     evidence_for "$node"
     "$GRAPH" start --state "$STATE" --node "$node" >/dev/null
     "$GRAPH" complete --state "$STATE" --node "$node" \
-        --output "${WORK}/outputs/${node}.md" \
-        --evidence "${WORK}/evidence/${node}.txt" >/dev/null
+        --output "${WORK}/.repomethod/outputs/${node}.md" \
+        --evidence "${WORK}/.repomethod/evidence/${node}.txt" >/dev/null
 }
 
 finish_graph_design() {
@@ -50,12 +55,52 @@ finish_graph_design() {
     complete_node plan
 }
 
+seed_conformance_authorities() {
+    local feature spec revision
+    feature="$(jq -r '.feature' "$STATE")"
+    spec="${WORK}/specs/${feature}.md"
+    cat > "$spec" <<SPEC
+# Task: ${feature}
+
+## Plan Obligations
+
+- \`graph\` [behaviour] The approved graph behavior is delivered.
+
+## Acceptance Criteria
+
+1. Graph behavior is delivered.
+
+## Acceptance Mapping
+
+| Criterion | Test/Evidence | Work Packet | Plan Ref |
+| --- | --- | --- | --- |
+| 1 | graph-check | main | \`obl.graph\` |
+SPEC
+    "$PLAN" extract --mode graph --spec "$spec" --repo "$WORK" >/dev/null
+    revision="$(jq -r '.revision' "${WORK}/.repomethod/workflows/${feature}.plan-obligations.json")"
+    "$PLAN" approve --mode graph --spec "$spec" --repo "$WORK" \
+        --revision "$revision" --approval-text reviewed >/dev/null
+}
+
 approve_graph() {
     local revision
+    seed_conformance_authorities
     revision="$(jq -r '.design_revision' "$STATE")"
     evidence_for graph-approval
     "$GRAPH" approve-graph --state "$STATE" --revision "$revision" \
-        --evidence "${WORK}/evidence/graph-approval.txt" >/dev/null
+        --evidence "${WORK}/.repomethod/evidence/graph-approval.txt" >/dev/null
+}
+
+# Run the required plan-conformance node with a passing verdict. The verdict
+# input file lives under .repomethod/ so it stays out of the reviewed diff.
+pass_graph_conformance() {
+    local node="${1:-plan-conformance}"
+    local verdict="${WORK}/.repomethod/${node}-input-verdict.json"
+    "$GRAPH" start --state "$STATE" --node "$node" >/dev/null
+    cat > "$verdict" <<'JSON'
+{"schema_version":1,"overall":"pass","table":[{"plan_ref":"obl.graph","type":"behaviour","status":"pass","rationale":"approved graph behavior is present in the reviewed diff"}],"blockers":[]}
+JSON
+    "$GRAPH" conform --state "$STATE" --node "$node" --verdict "$verdict" >/dev/null
 }
 
 @test "public workflow surface has exactly quick-mvp classic and graph" {
@@ -122,7 +167,8 @@ approve_graph() {
     [ "$(jq -r '.status' "$STATE")" = "discovering" ]
     [ "$(jq -r '.config.research' "$STATE")" = "single" ]
     [ "$(jq -r '.runnable[0].node_id' <<<"$output")" = "research" ]
-    [ "$(jq -r '[.nodes[].id] | join(",")' "$STATE")" = "research,plan,implementation,verification,completion" ]
+    [ "$(jq -r '[.nodes[].id] | join(",")' "$STATE")" = \
+        "research,plan,implementation,verification,completion,plan-conformance" ]
 }
 
 @test "parallel research is a configurable fan-out joined by plan" {
@@ -166,7 +212,7 @@ approve_graph() {
     evidence_for early-approval
 
     run "$GRAPH" approve-graph --state "$STATE" --revision 1 \
-        --evidence "${WORK}/evidence/early-approval.txt"
+        --evidence "${WORK}/.repomethod/evidence/early-approval.txt"
     [ "$status" -ne 0 ]
     [[ "$output" == *"not awaiting approval"* ]]
 
@@ -191,7 +237,7 @@ approve_graph() {
 
     evidence_for stale-approval
     run "$GRAPH" approve-graph --state "$STATE" --revision "$displayed_revision" \
-        --evidence "${WORK}/evidence/stale-approval.txt"
+        --evidence "${WORK}/.repomethod/evidence/stale-approval.txt"
     [ "$status" -ne 0 ]
     [[ "$output" == *"stale"* ]]
 
@@ -254,8 +300,8 @@ approve_graph() {
     "$GRAPH" start --state "$STATE" --node verification >/dev/null
 
     run "$GRAPH" complete --state "$STATE" --node verification \
-        --output "${WORK}/outputs/verification.md" \
-        --evidence "${WORK}/evidence/verification.txt"
+        --output "${WORK}/.repomethod/outputs/verification.md" \
+        --evidence "${WORK}/.repomethod/evidence/verification.txt"
 
     [ "$status" -ne 0 ]
     [[ "$output" == *"use verify"* ]]
@@ -341,7 +387,7 @@ approve_graph() {
     [ "$(jq -r '.nodes[] | select(.id == "legal") | .status' "$STATE")" = "awaiting_human" ]
     evidence_for legal-approval
     "$GRAPH" approve --state "$STATE" --node legal \
-        --evidence "${WORK}/evidence/legal-approval.txt" >/dev/null
+        --evidence "${WORK}/.repomethod/evidence/legal-approval.txt" >/dev/null
     run "$GRAPH" next --state "$STATE"
     [ "$output" = "implementation" ]
 }
@@ -365,7 +411,7 @@ approve_graph() {
     revision="$(jq -r '.design_revision' "$STATE")"
     evidence_for graph-approval
     run "$GRAPH" approve-graph --state "$STATE" --revision "$revision" \
-        --evidence "${WORK}/evidence/graph-approval.txt"
+        --evidence "${WORK}/.repomethod/evidence/graph-approval.txt"
     [ "$status" -ne 0 ]
     [[ "$output" == *"Verification"* ]]
 }
@@ -387,10 +433,10 @@ approve_graph() {
     evidence_for completion
     "$GRAPH" start --state "$STATE" --node completion >/dev/null
     run "$GRAPH" complete --state "$STATE" --node completion \
-        --output "${WORK}/outputs/completion.md" \
-        --evidence "${WORK}/evidence/completion.txt"
+        --output "${WORK}/.repomethod/outputs/completion.md" \
+        --evidence "${WORK}/.repomethod/evidence/completion.txt"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"every implementation and verification node"* ]]
+    [[ "$output" == *"plan conformance"* ]]
     [ "$(jq -r '.status' "$STATE")" != "completed" ]
 }
 
@@ -400,11 +446,12 @@ approve_graph() {
     approve_graph
     complete_node implementation
     "$GRAPH" verify --state "$STATE" --node verification --evidence "${WORK}/verify.log" >/dev/null
+    pass_graph_conformance
     evidence_for completion
     "$GRAPH" start --state "$STATE" --node completion >/dev/null
     run "$GRAPH" complete --state "$STATE" --node completion \
-        --output "${WORK}/outputs/completion.md" \
-        --evidence "${WORK}/evidence/completion.txt"
+        --output "${WORK}/.repomethod/outputs/completion.md" \
+        --evidence "${WORK}/.repomethod/evidence/completion.txt"
     [ "$status" -eq 0 ]
     [ "$(jq -r '.status' "$STATE")" = "completed" ]
     [ "$(jq -r '.nodes[] | select(.id == "completion") | .status' "$STATE")" = "completed" ]
@@ -416,12 +463,13 @@ approve_graph() {
     approve_graph
     complete_node implementation
     "$GRAPH" verify --state "$STATE" --node verification --evidence "${WORK}/verify.log" >/dev/null
+    pass_graph_conformance
     [ "$(jq -r '.nodes[] | select(.id == "completion") | .status' "$STATE")" = "pending" ]
 
     evidence_for completion
     run "$GRAPH" complete --state "$STATE" --node completion \
-        --output "${WORK}/outputs/completion.md" \
-        --evidence "${WORK}/evidence/completion.txt"
+        --output "${WORK}/.repomethod/outputs/completion.md" \
+        --evidence "${WORK}/.repomethod/evidence/completion.txt"
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"[auto-start] completion"* ]]
@@ -436,12 +484,13 @@ approve_graph() {
     approve_graph
     complete_node implementation
     "$GRAPH" verify --state "$STATE" --node verification --evidence "${WORK}/verify.log" >/dev/null
+    pass_graph_conformance
 
     evidence_for completion
     "$GRAPH" start --state "$STATE" --node completion >/dev/null
     run "$GRAPH" complete --state "$STATE" --node completion \
-        --output "${WORK}/outputs/completion.md" \
-        --evidence "${WORK}/evidence/completion.txt"
+        --output "${WORK}/.repomethod/outputs/completion.md" \
+        --evidence "${WORK}/.repomethod/evidence/completion.txt"
 
     [ "$status" -eq 0 ]
     [[ "$output" != *"[auto-start]"* ]]
@@ -461,8 +510,8 @@ approve_graph() {
     evidence_for completion
     "$GRAPH" start --state "$STATE" --node completion >/dev/null
     run "$GRAPH" complete --state "$STATE" --node completion \
-        --output "${WORK}/outputs/completion.md" \
-        --evidence "${WORK}/evidence/completion.txt"
+        --output "${WORK}/.repomethod/outputs/completion.md" \
+        --evidence "${WORK}/.repomethod/evidence/completion.txt"
     [ "$status" -eq 0 ]
     [ "$(jq -r '.status' "$STATE")" = "completed" ]
 }
