@@ -77,6 +77,36 @@ normalize_gate_command() {
     done
 }
 
+# Persist the canonical Source Intent returned by intent-lineage.sh into the
+# workflow state created by workflow-graph.sh. This wrapper does not parse or
+# hash intent identity: intent-lineage.sh is the sole authority. Legacy specs
+# resolve to null and therefore preserve the existing state shape.
+bind_intent_lineage() {
+    local -a in=("$@")
+    local i feature="" state="" spec binding tmp
+    for ((i = 0; i < ${#in[@]}; i++)); do
+        case "${in[i]}" in
+            --feature) feature="${in[i + 1]:-}" ;;
+            --state) state="${in[i + 1]:-}" ;;
+        esac
+    done
+    [ -n "$feature" ] || { echo "error: cannot bind intent lineage without --feature" >&2; return 1; }
+    [ -n "$state" ] || state=".repomethod/workflows/${feature}.json"
+    spec="specs/${feature}.md"
+    [ -f "$spec" ] || return 0
+    binding="$("${here}/intent-lineage.sh" resolve --spec "$spec" --repo .)" || return $?
+    [ "$binding" != "null" ] || return 0
+    [ -f "$state" ] || { echo "error: workflow state not found after init: $state" >&2; return 1; }
+    tmp="$(mktemp "${state}.intent.XXXXXX")"
+    if jq --argjson binding "$binding" '.intent_lineage = $binding' "$state" > "$tmp"; then
+        mv "$tmp" "$state"
+    else
+        rm -f "$tmp"
+        echo "error: failed to persist source intent lineage in workflow state" >&2
+        return 1
+    fi
+}
+
 case "$mode" in
     quick-mvp)
         assert_baseline_green false
@@ -118,7 +148,9 @@ EOF
             "${here}/preflight.sh" >&2 || exit $?
             assert_baseline_green true
             normalize_gate_command --mode classic "$@"
-            exec "${here}/workflow-graph.sh" init "${NORMALIZED_ARGS[@]}"
+            "${here}/workflow-graph.sh" init "${NORMALIZED_ARGS[@]}"
+            bind_intent_lineage "${NORMALIZED_ARGS[@]}"
+            exit 0
         fi
         exec "${here}/workflow-graph.sh" "$@"
         ;;
@@ -143,7 +175,9 @@ EOF
             "${here}/preflight.sh" >&2 || exit $?
             assert_baseline_green true
             normalize_gate_command "$@"
-            exec "${here}/workflow-graph.sh" init "${NORMALIZED_ARGS[@]}"
+            "${here}/workflow-graph.sh" init "${NORMALIZED_ARGS[@]}"
+            bind_intent_lineage "${NORMALIZED_ARGS[@]}"
+            exit 0
         fi
         exec "${here}/workflow-graph.sh" "$@"
         ;;

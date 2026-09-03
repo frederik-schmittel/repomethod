@@ -116,15 +116,17 @@ if [ -n "$STATE" ]; then
     esac
 fi
 
+intent_state_args=()
 provenance_state_args=()
 if [ -n "$STATE" ]; then
+    intent_state_args=(--state "$STATE")
     provenance_state_args=(--state "$STATE")
 fi
 
 "${here}/verify.sh" --warn-frontend-uncovered .
 "${here}/verify-scope.sh" --spec "$SPEC" "${scope_base_args[@]}" --repo .
 "${here}/verify-forbidden.sh" --spec "$SPEC" --repo .
-"${here}/intent-lineage.sh" check --spec "$SPEC" --repo .
+"${here}/intent-lineage.sh" check --spec "$SPEC" "${intent_state_args[@]}" --repo .
 "${here}/plan-obligations.sh" check "${obligation_mode_args[@]}" --spec "$SPEC" --repo .
 "${here}/verify-provenance.sh" --spec "$SPEC" "${provenance_state_args[@]}" --repo .
 "${here}/verify-contracts.sh" --spec "$SPEC"
