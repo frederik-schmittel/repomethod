@@ -16,6 +16,7 @@ usage() {
     cat <<'USAGE'
 usage:
   plan-conformance.sh prepare --state <workflow-state> --node <plan-conformance-id>
+  plan-conformance.sh template --state <workflow-state> --node <plan-conformance-id>
   plan-conformance.sh record --state <workflow-state> --node <plan-conformance-id> --verdict <verdict.json>
   plan-conformance.sh check --state <workflow-state>
   plan-conformance.sh status --state <workflow-state>
@@ -186,6 +187,23 @@ require_conformance_node() {
 context_path_for_node() { printf '%s/%s-%s-context.json\n' "$evidence_dir" "$feature" "$1"; }
 diff_path_for_node() { printf '%s/%s-%s-diff.patch\n' "$evidence_dir" "$feature" "$1"; }
 verdict_path_for_node() { printf '%s/%s-%s-verdict.json\n' "$evidence_dir" "$feature" "$1"; }
+
+# Emit a verdict skeleton with one table row per approved obligation so the
+# reviewer fills in status + rationale instead of hand-typing nested JSON.
+# overall/status are intentionally blank: `record` rejects it until completed.
+template_verdict() {
+    require_conformance_node
+    [ "$mode" = "graph" ] || fail "plan conformance applies only to Graph workflows"
+    [ -f "$artifact_path" ] || fail "approved plan-obligations artifact is missing: $artifact_rel"
+    jq -e '.review.status == "approved"' "$artifact_path" >/dev/null 2>&1 \
+        || fail "plan-obligations artifact is not approved"
+    jq '{
+        schema_version: 1,
+        overall: "",
+        table: [.obligations[] | {plan_ref: .id, type: .type, status: "", rationale: ""}],
+        blockers: []
+    }' "$artifact_path"
+}
 
 prepare_context() {
     require_conformance_node
@@ -389,6 +407,9 @@ status_json() {
 case "$command" in
     prepare)
         prepare_context
+        ;;
+    template)
+        template_verdict
         ;;
     record)
         record_verdict

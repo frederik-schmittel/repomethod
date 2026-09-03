@@ -55,17 +55,23 @@ The returned bundle pins the workflow `config.base_ref` and supplies the
 approved plan snapshot, reviewed `obl.<anchor>` plan obligations, canonical
 descope state, full feature diff, and
 `.repomethod/templates/plan-conformance-rubric.md`. Review only those generated
-authorities. Write the rubric's machine-readable verdict JSON, then record it:
+authorities. Scaffold the verdict JSON with one row per approved obligation, fill
+in each `status` + `rationale` and `overall`, then record it:
 
 ```bash
+.repomethod/scripts/plan-conformance.sh template --state "$STATE" \
+  --node plan-conformance > .repomethod/evidence/<feature>-review.json
+# edit the file, then:
 .repomethod/scripts/workflow-graph.sh conform --state "$STATE" \
   --node plan-conformance \
   --verdict .repomethod/evidence/<feature>-review.json
 ```
 
 A passing verdict unlocks Completion only while its snapshot remains current.
-Any relevant diff, approved-plan, obligation, descope, or rubric change makes
-that result stale. A blocked verdict creates a numbered
+Any working-tree change after the verdict — including reverting one — makes it
+stale, so run conformance last and commit immediately, before touching anything
+else. Any relevant diff, approved-plan, obligation, descope, or rubric change
+makes that result stale. A blocked verdict creates a numbered
 `conformance-fix-N -> conformance-verification-N -> plan-conformance-N` retry
 chain. The retry conformance node also requires a fresh reviewer context.
 Unreviewed or rejected descopes, untreated orphan obligations, or open verdict

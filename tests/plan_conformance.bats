@@ -161,6 +161,24 @@ JSON
     [ "$(jq -r '.nodes[] | select(.id == "completion") | .dependencies[0]' "$STATE")" = "plan-conformance-1" ]
 }
 
+@test "template emits a verdict skeleton with one blank row per approved obligation" {
+    activate_graph
+    run "$CONFORMANCE" template --state "$STATE" --node plan-conformance
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.schema_version' <<< "$output")" = "1" ]
+    [ "$(jq -r '.overall' <<< "$output")" = "" ]
+    [ "$(jq -c '[.table[].plan_ref]' <<< "$output")" = '["obl.shape","obl.behaviour"]' ]
+    [ "$(jq -c '[.table[].type]' <<< "$output")" = '["shape","behaviour"]' ]
+    [ "$(jq -r '[.table[] | select(.status == "" and .rationale == "")] | length' <<< "$output")" = "2" ]
+    [ "$(jq -c '.blockers' <<< "$output")" = "[]" ]
+    # the skeleton is deliberately invalid until filled in
+    "$GRAPH" start --state "$STATE" --node plan-conformance >/dev/null
+    printf '%s' "$output" > "${WORK}/.repomethod/evidence/skeleton.json"
+    run "$GRAPH" conform --state "$STATE" --node plan-conformance \
+        --verdict "${WORK}/.repomethod/evidence/skeleton.json"
+    [ "$status" -ne 0 ]
+}
+
 @test "current successful conformance unlocks completion and is stored in handoff" {
     activate_graph
     pass_conformance plan-conformance

@@ -40,6 +40,10 @@ authorities, so writing the context/verdict does not stale itself.
 
 ## Verdict contract
 
+`plan-conformance.sh template --state <s> --node <n>` prints a verdict skeleton
+with one blank row per approved obligation; the reviewer fills in each `status`
++ `rationale` and `overall` rather than hand-writing the JSON.
+
 The reviewer records one table row per approved obligation with its exact type
 (`shape`, `behaviour`, `prohibition`, or `process`) and one of `pass`, `fail`,
 `accepted_descope`, or `orphan`. The verdict also carries a blocker list.

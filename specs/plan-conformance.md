@@ -21,7 +21,7 @@ Make Graph delivery prove that the complete feature diff still conforms to the a
 
 - `required-node` [shape] [invariant_required] Graph execution contains a required plan-conformance boundary after Verification and before Completion.
 - `pinned-review-context` [behaviour] [invariant_required] Plan conformance reviews the full feature diff from the workflow's pinned base together with the approved plan snapshot, approved plan obligations, canonical descopes, and fixed rubric.
-- `verdict-contract` [shape] A conformance attempt persists a machine-readable obligation verdict table and blocker list bound to the reviewed snapshot.
+- `verdict-contract` [shape] A conformance attempt persists a machine-readable obligation verdict table and blocker list bound to the reviewed snapshot, and `plan-conformance.sh template` emits a one-row-per-obligation skeleton for the reviewer to fill in.
 - `completion-block` [prohibition] [invariant_required] Graph Completion and delivery must not succeed when plan conformance is missing, stale, blocked, or backed by invalid review authorities.
 - `conformance-retry` [behaviour] A blocked conformance attempt creates a numbered fix, re-verification, and fresh plan-conformance retry chain within the bounded retry policy.
 - `fresh-context` [process] A Graph plan-conformance dispatch requires fresh reviewer context and the Graph Delivery method instructs the reviewer to use only the generated context bundle and rubric.
@@ -32,7 +32,7 @@ Make Graph delivery prove that the complete feature diff still conforms to the a
 
 1. A Graph cannot complete without a current successful plan-conformance result.
 2. The conformance context reviews the full feature diff from `config.base_ref`, not a re-guessed base.
-3. Open blockers plus unreviewed or rejected descopes prevent a passing result.
+3. Open blockers plus unreviewed or rejected descopes prevent a passing result; `plan-conformance.sh template` scaffolds a verdict with one blank row per approved obligation.
 4. Relevant source, plan-obligation, descope, approved-plan, or rubric changes after a verdict make it stale.
 5. A failed check creates traceable numbered retry nodes after re-verification.
 6. Conformance dispatch requires fresh context and the handoff exposes conformance status.
