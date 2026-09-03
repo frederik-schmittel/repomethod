@@ -178,6 +178,14 @@ need explicit Scope.
 that SHA instead of re-resolving; pass `--base <ref>` to `init` only to override
 the automatic choice.
 
+If the feature spec declares `## Source Intent` (see
+[INTENT_LINEAGE.md](INTENT_LINEAGE.md)), `init` validates that binding before it
+writes state and stores the exact canonical object as `intent_lineage`. Every
+stateful subcommand then reverifies it through `intent-lineage.sh check --state`
+and fails closed on a stale, substituted, or spec-mismatched binding. `status`,
+`preview`, and the handoff sidecar surface `intent=<path>` for a bound workflow;
+a legacy workflow has no `intent_lineage` key and is unchanged.
+
 Each dispatch entry contains the node goal, role, dependencies, completed
 dependency artifacts, and whether fresh verification context is required. A
 new session resumes with:
