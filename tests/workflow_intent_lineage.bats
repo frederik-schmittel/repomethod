@@ -262,3 +262,38 @@ EOF_INTENT_STUB
     [ "$status" -eq 23 ]
     [[ "$output" == *"intent-called:check --spec specs/demo.md --state state.json --repo ."* ]]
 }
+
+@test "status preview and handoff surface the bound intent and stay silent for a legacy workflow" {
+    init_bound_feature classic demo >/dev/null
+    state="$WORK/.repomethod/workflows/demo.json"
+
+    run "$GRAPH" status --state "$state"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"intent=intents/demo.md"* ]]
+
+    run "$GRAPH" preview --state "$state"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"intent=intents/demo.md"* ]]
+
+    run "$GRAPH" handoff --state "$state" --node implementation \
+        --next "review" --changed "src/x"
+    [ "$status" -eq 0 ]
+    run jq -e '.intent_lineage.path == "intents/demo.md" and .intent_lineage.schema_version == 1' \
+        "$WORK/.repomethod/workflows/demo.handoff.json"
+    [ "$status" -eq 0 ]
+
+    write_legacy_spec legacy
+    commit_fixture
+    (cd "$WORK" && "$FEATURE" classic init --feature legacy \
+        --state ".repomethod/workflows/legacy.json" --verify-command true --base HEAD >/dev/null)
+    legacy_state="$WORK/.repomethod/workflows/legacy.json"
+
+    run "$GRAPH" status --state "$legacy_state"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"intent="* ]]
+    run "$GRAPH" handoff --state "$legacy_state" --node implementation \
+        --next "review" --changed "src/x"
+    [ "$status" -eq 0 ]
+    run jq -e '.intent_lineage == null' "$WORK/.repomethod/workflows/legacy.handoff.json"
+    [ "$status" -eq 0 ]
+}

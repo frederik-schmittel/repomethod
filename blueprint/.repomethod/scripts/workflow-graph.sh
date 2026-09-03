@@ -6,10 +6,27 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 descope_ledger="${here}/descope-ledger.sh"
 plan_conformance="${here}/plan-conformance.sh"
+intent_lineage="${here}/intent-lineage.sh"
 
 die() {
     echo "workflow-graph: $*" >&2
     exit 1
+}
+
+# Fail closed when a workflow's stored Source Intent binding is malformed, stale,
+# substituted, or no longer matches the current spec. intent-lineage.sh owns
+# every identity decision; a legacy state with no binding whose spec also
+# declares none is NOT_APPLICABLE there and passes. The repo is resolved from the
+# state's own directory so a relocated checkout verifies against its own
+# artifacts rather than the recorded absolute path.
+assert_intent_lineage() {
+    local file="$1" state_dir repo out
+    state_dir="$(cd "$(dirname "$file")" && pwd -P)"
+    repo="$(git -C "$state_dir" rev-parse --show-toplevel 2>/dev/null || true)"
+    [ -n "$repo" ] || repo="$(jq -r '.repo_root' "$file" 2>/dev/null || true)"
+    [ -d "$repo" ] || die "invalid source intent lineage: cannot locate the repository for $file"
+    out="$("$intent_lineage" check --state "$file" --repo "$repo" 2>&1)" \
+        || die "invalid source intent lineage: $out"
 }
 
 usage() {
@@ -194,6 +211,7 @@ load_state() {
     # confines every derived path to its own directory by construction.
     refuse_symlinked_state "$state"
     validate_id "$(jq -r '.feature' "$state")" "feature slug in ${state}:"
+    assert_intent_lineage "$state"
 }
 
 update_state() {
@@ -300,7 +318,7 @@ dispatch_json() {
 
 preview_workflow() {
     jq -r --arg state_path "$state" '
-        "state=\($state_path) feature=\(.feature) mode=\(.mode) status=\(.status) revision=\(.design_revision) retries=\(.retry_count)/\(.max_retries)",
+        "state=\($state_path) feature=\(.feature) mode=\(.mode) status=\(.status) revision=\(.design_revision) retries=\(.retry_count)/\(.max_retries)\(if .intent_lineage then " intent=\(.intent_lineage.path)" else "" end)",
         "config: research=\(.config.research) max_parallel=\(.config.max_parallel) sequential_fallback=\(.config.sequential_fallback) verify=\(.config.verification_command)",
         "ID\tTYPE\tROLE\tDEPENDS ON\tHUMAN GATE\tGOAL",
         (.nodes
@@ -884,7 +902,7 @@ case "$command" in
                 runnable_ids
                 ;;
             status)
-                jq -r '"feature=\(.feature) mode=\(.mode) status=\(.status) retries=\(.retry_count)/\(.max_retries)", (.nodes | sort_by(.order, .id)[] | "\(.id)\t\(.type)\t\(.role)\t\(.status)\t\(.outcome // "-")")' "$state"
+                jq -r '"feature=\(.feature) mode=\(.mode) status=\(.status) retries=\(.retry_count)/\(.max_retries)\(if .intent_lineage then " intent=\(.intent_lineage.path)" else "" end)", (.nodes | sort_by(.order, .id)[] | "\(.id)\t\(.type)\t\(.role)\t\(.status)\t\(.outcome // "-")")' "$state"
                 ;;
             approve-graph)
                 [ -n "$evidence" ] || die "--evidence is required"
@@ -1274,7 +1292,8 @@ case "$command" in
                       workflow_revision: $state[0].design_revision,
                       descopes: $descopes,
                       open_descope_ids: $open_descope_ids,
-                      plan_conformance: $plan_conformance
+                      plan_conformance: $plan_conformance,
+                      intent_lineage: ($state[0].intent_lineage // null)
                     }
                 ' > "$tmp" || { rm -f "$tmp"; die "failed to render handoff"; }
                 mv "$tmp" "$handoff_path"
