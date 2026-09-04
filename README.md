@@ -125,6 +125,9 @@ in order, from the repo root, and all must exit 0.
 `.repomethod/scripts/agent-gate.sh --spec <spec>` runs that check plus the
 structural gates and trusts only their exit status:
 
+- `verify-spec-lint.sh` — fails closed unless the persisted spec declares a
+  meaningful `## Scope` and a listed `## Acceptance Criteria` before other
+  gates evaluate it;
 - `verify.sh` — the configured command;
 - `verify-scope.sh` — committed, staged, unstaged, and untracked files stay
   inside the spec's Scope and off protected paths;

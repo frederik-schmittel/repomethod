@@ -15,6 +15,15 @@ installation knows what `repomethod update` will do:
 local` in the manifest) and never overwrites it again. When an entry touches a
 script you have forked, re-apply the change to your fork by hand.
 
+## [Unreleased]
+
+### behavior-change
+
+- `verify-spec-lint.sh` now runs first in the persisted-spec `agent-gate.sh`
+  path and rejects a missing, empty, or placeholder-only `## Scope`, as well as
+  a missing or list-less `## Acceptance Criteria`. Existing repository specs
+  pass unchanged; Quick MVP remains exempt because it has no persisted spec. (#25)
+
 ## [0.0.2]
 
 Four opt-in specification sections and the Graph plan-conformance boundary.

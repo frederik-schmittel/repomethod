@@ -401,3 +401,32 @@ EOF
     [[ "$output" == *"CONTRACT-GATE-RAN"* ]]
     [[ "$output" == *"all gates passed"* ]]
 }
+
+@test "agent gate runs spec lint before verify and stops on an invalid spec" {
+    printf 'true\n' > "${WORK}/.repomethod/verify-command"
+    cat > "${WORK}/specs/my-feature.md" <<'EOF'
+# Task: invalid structural spec
+
+## Scope
+
+- TBD
+
+## Acceptance Criteria
+
+1. would otherwise run verification
+EOF
+    cat > "${WORK}/.repomethod/scripts/verify.sh" <<'EOF'
+#!/usr/bin/env bash
+echo VERIFY-SHOULD-NOT-RUN
+exit 99
+EOF
+    chmod +x "${WORK}/.repomethod/scripts/verify.sh"
+    cd "$WORK" && git init -q -b main && git config user.email t@e.x && git config user.name T \
+        && git add -A && git commit -q -m init
+
+    run "${WORK}/.repomethod/scripts/agent-gate.sh" --spec specs/my-feature.md --base HEAD
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"REJECTED: Scope"* ]]
+    [[ "$output" != *"VERIFY-SHOULD-NOT-RUN"* ]]
+}
