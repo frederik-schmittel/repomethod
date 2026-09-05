@@ -5,20 +5,30 @@
 
 </div>
 
-**RepoMethod installs one engineering method into your Git repository, so every
-coding agent — Claude Code or Codex, local or cloud — delivers work the same
-way: same scope rules, same verification, same "done" bar.**
+**RepoMethod puts one engineering method into your Git repository, so every
+coding agent follows the same scope rules, verification, and "done" bar,
+whether it is Claude Code or Codex, local or cloud.**
 
-The rules live as plain files in `.repomethod/`, not in a chat prompt. A cold
-agent reads them and starts. Real shell commands — not the model's judgement —
-decide whether a change stayed in scope, whether the tests pass, and whether the
-feature is finished. One `deliver.sh` call returns a single verdict: `done`,
-`blocked`, or `incomplete`.
+Coding agents implement the same task differently, lose project conventions
+between sessions, and often decide for themselves when work is finished.
+RepoMethod puts the method in the repository instead of the prompt:
 
-Fixed, opinionated defaults that you can edit. No service, no daemon, no
-lock-in. Tested with Claude Code and Codex on macOS and Ubuntu.
+- **One method for every agent**: Claude Code or Codex, local or cloud, all
+  reading the same plain files.
+- **Deterministic delivery gates**: real shell commands, not model
+  judgement, decide whether scope held, tests pass, evidence exists, and
+  acceptance criteria are met.
+- **Persistent workflow state**: a task started locally resumes from a clean
+  checkout or on another agent host.
+- **Repository-owned**: editable defaults, offline operation, no service, no
+  daemon, no lock-in.
 
-It is an open, provider-neutral implementation of the AI-native SDLC — intent →
+The rules live as plain files in `.repomethod/`. A cold agent reads them and
+starts without prior chat context. One `deliver.sh` call returns a single
+verdict: `done`, `blocked`, or `incomplete`. Tested with Claude Code and
+Codex on macOS and Ubuntu.
+
+It is an open, provider-neutral implementation of the AI-native SDLC: intent →
 spec → deterministic gates → AI in the review loop → governance as code. That
 shape follows the practices in Anthropic's
 [AI-Native SDLC Playbook](https://academy.claude.com/courses/ai-native-sdlc-playbook)
@@ -198,6 +208,9 @@ completion, and optional intent-to-delivery lineage. The
 Near-term work is tracked as concrete GitHub issues:
 
 - **Progressive agent context** ([#15](https://github.com/frederik-schmittel/repomethod/issues/15)) — keep the always-loaded agent contract small and retrieve workflow-specific knowledge only when needed.
+- **Protect RepoMethod's own gate machinery by default** ([#24](https://github.com/frederik-schmittel/repomethod/issues/24)) — add `.repomethod/verify-command` and `.repomethod/scripts/*` to the default `protected-zones.txt`, and state plainly that delivery assumes a human reviews the diff before `deliver.sh` runs.
+- **Deterministic spec structural lint** ([#25](https://github.com/frederik-schmittel/repomethod/issues/25)) — reject a spec whose Scope or Acceptance Criteria section is missing or a placeholder, before any other gate evaluates it.
+- **Bind generic evidence to the current workflow run** ([#26](https://github.com/frederik-schmittel/repomethod/issues/26)) — reject declared evidence that predates the node's own `started` event, closing the gap where a stale file from an earlier run could stand in for fresh proof.
 
 Longer-term directions are deliberately recorded here before their interfaces are
 fixed enough for implementation issues:
