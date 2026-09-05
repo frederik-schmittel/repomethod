@@ -27,9 +27,13 @@ section_count() {
 
 section_lines() {
     awk -v heading="$1" '
-        $0 == "## " heading { in_section=1; next }
-        /^## / { in_section=0 }
-        in_section { print }
+        {
+            line=$0
+            sub(/\r$/, "", line)
+        }
+        line ~ "^## " heading "[[:space:]]*$" { in_section=1; next }
+        line ~ /^## / { in_section=0 }
+        in_section { print line }
     ' "$spec"
 }
 
@@ -69,9 +73,13 @@ fi
 
 acceptance_section_lines() {
     awk '
-        /^## (Acceptance Criteria|Akzeptanzkriterien)$/ { in_section=1; next }
-        /^## / { in_section=0 }
-        in_section { print }
+        {
+            line=$0
+            sub(/\r$/, "", line)
+        }
+        line ~ /^## (Acceptance Criteria|Akzeptanzkriterien)[[:space:]]*$/ { in_section=1; next }
+        line ~ /^## / { in_section=0 }
+        in_section { print line }
     ' "$spec"
 }
 

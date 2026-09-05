@@ -32,6 +32,24 @@ EOF
     [[ "$output" == *"OK: spec structure"* ]]
 }
 
+@test "accepts section headings with trailing whitespace and CRLF line endings" {
+    printf '%s\r\n' \
+        '# Task: CRLF headings' \
+        '' \
+        '## Scope   ' \
+        '' \
+        '- `src/**`' \
+        '' \
+        '## Acceptance Criteria   ' \
+        '' \
+        '1. feature behavior is covered' > "${WORK}/spec.md"
+
+    run "$SCRIPT" --spec "${WORK}/spec.md"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"OK: spec structure"* ]]
+}
+
 @test "rejects a missing Scope section" {
     cat > "${WORK}/spec.md" <<'EOF'
 # Task: no scope
