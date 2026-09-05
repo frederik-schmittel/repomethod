@@ -84,6 +84,25 @@ EOF
     [[ "$output" == *"REJECTED: Scope"* ]]
 }
 
+@test "rejects an empty Scope bullet" {
+    cat > "${WORK}/spec.md" <<'EOF'
+# Task: empty scope bullet
+
+## Scope
+
+-
+
+## Acceptance Criteria
+
+- behavior is covered
+EOF
+
+    run "$SCRIPT" --spec "${WORK}/spec.md"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"REJECTED: Scope"* ]]
+}
+
 @test "rejects missing or empty Acceptance Criteria" {
     cat > "${WORK}/spec.md" <<'EOF'
 # Task: no acceptance
@@ -95,6 +114,27 @@ EOF
 ## Acceptance Criteria
 
 Narrative alone is not a criterion.
+EOF
+
+    run "$SCRIPT" --spec "${WORK}/spec.md"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"REJECTED: Acceptance Criteria"* ]]
+}
+
+@test "rejects acceptance items inside an HTML comment" {
+    cat > "${WORK}/spec.md" <<'EOF'
+# Task: commented acceptance
+
+## Scope
+
+- `src/**`
+
+## Acceptance Criteria
+
+<!--
+- [ ] fill this in
+-->
 EOF
 
     run "$SCRIPT" --spec "${WORK}/spec.md"

@@ -60,7 +60,7 @@ while IFS= read -r raw || [ -n "$raw" ]; do
     case "$candidate" in '- '*) candidate="${candidate#'- '}" ;; esac
     candidate="${candidate#\`}"; candidate="${candidate%\`}"
     lower="$(printf '%s' "$candidate" | tr '[:upper:]' '[:lower:]')"
-    case "$lower" in tbd|todo|'???') continue ;; esac
+    case "$lower" in ''|'-'|tbd|todo|'???') continue ;; esac
     meaningful_scope=true
     break
 done < <(section_lines "Scope")
@@ -84,10 +84,21 @@ acceptance_section_lines() {
 }
 
 has_acceptance_item=false
+in_comment=false
 while IFS= read -r raw || [ -n "$raw" ]; do
     line="${raw%$'\r'}"
     trimmed="$line"
     while [[ "$trimmed" == [[:space:]]* ]]; do trimmed="${trimmed#?}"; done
+
+    if [ "$in_comment" = true ]; then
+        case "$trimmed" in *'-->'*) in_comment=false ;; esac
+        continue
+    fi
+    case "$trimmed" in
+        ''|'<!--'*'-->') continue ;;
+        '<!--'*) in_comment=true; continue ;;
+    esac
+
     case "$trimmed" in
         '- '*) has_acceptance_item=true ;;
         '* '*) has_acceptance_item=true ;;
