@@ -168,7 +168,7 @@ EOF_SPEC
     cp "${REPO_ROOT}/blueprint/.repomethod/scripts/agent-gate.sh" "$bin/agent-gate.sh"
     chmod +x "$bin/agent-gate.sh"
 
-    for name in preflight verify verify-scope verify-forbidden plan-obligations verify-provenance verify-contracts verify-acceptance verify-evidence verify-report verify-invariants; do
+    for name in preflight verify-spec-lint verify verify-scope verify-forbidden plan-obligations verify-provenance verify-contracts verify-acceptance verify-evidence verify-report verify-invariants; do
         cat > "$bin/${name}.sh" <<'EOF_STUB'
 #!/usr/bin/env bash
 exit 0
