@@ -2,10 +2,10 @@
 # agent-gate.sh --spec <required> [--base <b>] [--state <f>] [--report <r>]
 # agent-gate.sh --quick [--base <b>] [--report <r>]
 #
-# Full gate (classic/graph): runs verify, verify-scope, verify-forbidden,
-# intent-lineage, plan-obligations, verify-provenance, verify-contracts,
-# verify-acceptance, verify-evidence, verify-report, and verify-invariants in
-# order and trusts only their exit status. Every argument comes from a flag —
+# Full gate (classic/graph): runs verify-spec-lint, verify, verify-scope,
+# verify-forbidden, intent-lineage, plan-obligations, verify-provenance,
+# verify-contracts, verify-acceptance, verify-evidence, verify-report, and
+# verify-invariants in order and trusts only their exit status. Every argument comes from a flag —
 # nothing is read from the environment. --spec has no default and fails closed
 # if omitted.
 #
@@ -123,6 +123,7 @@ if [ -n "$STATE" ]; then
     provenance_state_args=(--state "$STATE")
 fi
 
+"${here}/verify-spec-lint.sh" --spec "$SPEC"
 "${here}/verify.sh" --warn-frontend-uncovered .
 "${here}/verify-scope.sh" --spec "$SPEC" "${scope_base_args[@]}" --repo .
 "${here}/verify-forbidden.sh" --spec "$SPEC" --repo .

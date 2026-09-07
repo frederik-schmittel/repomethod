@@ -20,6 +20,7 @@ Manage repository skills only through `.repomethod/scripts/manage-skills.sh`.
 ## Verification
 
 ```bash
+.repomethod/scripts/verify-spec-lint.sh --spec <spec>  # rejects a missing, empty, or placeholder-only Scope/Acceptance Criteria
 .repomethod/scripts/verify.sh .            # runs .repomethod/verify-command
 .repomethod/scripts/verify-scope.sh --spec <spec> --repo .
 .repomethod/scripts/verify-forbidden.sh --spec <spec> --repo .
